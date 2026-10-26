@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tirelire</title>
+  <meta name="description" content="Gère ton budget à la semaine, ta trésorerie et tes envies.">
+  <meta name="theme-color" content="#0D3B2C">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Tirelire">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 34 34" aria-hidden="true"><rect width="34" height="34" rx="11" fill="var(--hero)"/><rect x="11" y="9" width="12" height="3" rx="1.5" fill="var(--mint)"/><circle cx="17" cy="20.5" r="5.6" fill="none" stroke="var(--mint)" stroke-width="3"/></svg>
+      <div><h1>Tirelire</h1><div class="sync" id="sync"><i></i><span>Chargement…</span></div></div>
+    </div>
+    <nav class="tabs" role="tablist" id="tabs"></nav>
+  </header>
+  <main id="app"></main>
+</div>
+<button class="fab" id="fab" hidden aria-label="Ajouter une dépense"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Dépense</button>
+<div id="modalSlot"></div>
+<div id="toastSlot"></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
