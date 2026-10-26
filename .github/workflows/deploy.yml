@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # chaque jour ouvré, après la publication des taux de la BCE (vers 16 h, heure de Francfort)
+  schedule:
+    - cron: "30 15 * * 1-5"
 
 permissions:
   contents: read
@@ -22,6 +25,23 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      # Taux de référence de la BCE, servis par le site (data/taux.json) : l'appli n'appelle aucun service tiers.
+      # Si la BCE ne répond pas, on garde le fichier déjà présent dans le dépôt.
+      - name: Taux de change BCE du jour
+        run: |
+          if curl -sf --retry 3 https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml -o /tmp/bce.xml; then
+            python3 - <<'PY'
+          import json, re
+          x = open("/tmp/bce.xml").read()
+          date = re.search(r"time='([\d-]+)'", x).group(1)
+          rates = {c: float(v) for c, v in re.findall(r"currency='([A-Z]{3})' rate='([\d.]+)'", x)}
+          if len(rates) > 10:
+              json.dump({"source": "BCE", "date": date, "rates": rates}, open("data/taux.json", "w"))
+              print("Taux BCE du", date, ":", len(rates), "monnaies")
+          PY
+          else
+            echo "BCE injoignable : taux du dépôt conservés"
+          fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

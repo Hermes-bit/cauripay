@@ -6,8 +6,16 @@ const CFG=window.CAURIPAY_CONFIG||{}, Auth=window.CauriPayAuth;
 const DEMO=CFG.transferMode!=="live";
 const LEGAL_VERSION="2026-10";
 const URL_RECOVERY=/type=recovery/.test(location.hash);
-const eur=new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR",minimumFractionDigits:2,maximumFractionDigits:2});
-const eur0=new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR",maximumFractionDigits:0});
+// Monnaie de l'utilisateur : celle de son pays de résidence (profil), l'euro par défaut
+let CURC="", eur, eur0;
+const DEC={HUF:0,ISK:0};   // monnaies affichées sans centimes
+function setCurrency(code){
+  code=code||"EUR"; if(code===CURC) return; CURC=code; const d=DEC[code]??2;
+  eur=new Intl.NumberFormat("fr-FR",{style:"currency",currency:code,currencyDisplay:"narrowSymbol",minimumFractionDigits:d,maximumFractionDigits:d});
+  eur0=new Intl.NumberFormat("fr-FR",{style:"currency",currency:code,currencyDisplay:"narrowSymbol",maximumFractionDigits:0});
+}
+setCurrency("EUR");
+const fmIn=(v,code)=>{const d=DEC[code]??2; return new Intl.NumberFormat("fr-FR",{style:"currency",currency:code,currencyDisplay:"narrowSymbol",minimumFractionDigits:d,maximumFractionDigits:d}).format(v);};
 const nf0=new Intl.NumberFormat("fr-FR",{maximumFractionDigits:0});
 const nf5=new Intl.NumberFormat("fr-FR",{maximumFractionDigits:5});
 const fm=v=>eur.format(v), fm0=v=>eur0.format(Math.round(v));
@@ -28,7 +36,8 @@ const initials=n=>String(n||"").trim().split(/[\s@.]+/).filter(Boolean).slice(0,
 const first=n=>String(n||"").trim().split(/\s+/)[0]||"";
 const maskPhone=p=>{const d=String(p||"").replace(/\D/g,"");return d?"•••• "+d.slice(-2):"";};
 // "1 234,56 €" → "1 234<small>,56 €</small>" (centimes plus petits, comme sur la maquette)
-const money=v=>{const s=fm(v), m=s.match(/^(.*?)(,\d{2}\s€)$/); return m?`${m[1]}<small>${m[2]}</small>`:s;};
+const money=v=>{const s=fm(v), m=s.match(/^(.*?)(,\d+\s\S+)$/); return m?`${m[1]}<small>${m[2]}</small>`:s;};
+const curSym=()=>eur0.formatToParts(0).find(p=>p.type==="currency").value;
 const b64e=s=>btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 const b64d=s=>new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/")),c=>c.charCodeAt(0)));
 
@@ -86,15 +95,38 @@ const PALETTE=Object.values(OLD2NEW);
 const col=c=>OLD2NEW[String(c||"").toUpperCase()]||c||"#A3B096";
 const DEF_CATS=[["Courses",.34],["Restos & sorties",.14],["Shopping",.12],["Transport",.12],["Loisirs",.10],["Abonnements",.06],["Imprévus",.12]];
 
+/* ============ pays de résidence et monnaies ============ */
+const RES_GROUPS=[
+  ["Zone euro",[["DE","Allemagne"],["AT","Autriche"],["BE","Belgique"],["BG","Bulgarie"],["CY","Chypre"],["HR","Croatie"],["ES","Espagne"],["EE","Estonie"],["FI","Finlande"],["FR","France"],["GR","Grèce"],["IE","Irlande"],["IT","Italie"],["LV","Lettonie"],["LT","Lituanie"],["LU","Luxembourg"],["MT","Malte"],["NL","Pays-Bas"],["PT","Portugal"],["SK","Slovaquie"],["SI","Slovénie"]].map(x=>[...x,"EUR"])],
+  ["Union européenne, autres monnaies",[["DK","Danemark","DKK"],["HU","Hongrie","HUF"],["PL","Pologne","PLN"],["RO","Roumanie","RON"],["SE","Suède","SEK"],["CZ","Tchéquie","CZK"]]],
+  ["Espace économique européen",[["IS","Islande","ISK"],["LI","Liechtenstein","CHF"],["NO","Norvège","NOK"]]],
+  ["Hors Union européenne",[["GB","Royaume-Uni","GBP"],["CH","Suisse","CHF"]]]];
+const RES={}; RES_GROUPS.forEach(([g,l])=>l.forEach(([c,n,cur])=>RES[c]={name:n,cur,eea:g!=="Hors Union européenne"}));
+const CUR_NAME={EUR:"l'euro",GBP:"la livre sterling",CHF:"le franc suisse",SEK:"la couronne suédoise",DKK:"la couronne danoise",NOK:"la couronne norvégienne",ISK:"la couronne islandaise",PLN:"le zloty",CZK:"la couronne tchèque",HUF:"le forint",RON:"le leu roumain"};
+const resOf=P=>RES[(P&&P.country)||"FR"]||RES.FR;
+const resSelect=(id,val,attr)=>`<select class="in" id="${id}" ${attr||""}>${RES_GROUPS.map(([g,l])=>`<optgroup label="${esc(g)}">${l.map(([c,n,cur])=>`<option value="${c}" ${c===val?"selected":""}>${esc(n)} · ${cur}</option>`).join("")}</optgroup>`).join("")}</select>`;
+// Taux de référence de la BCE (1 € = x). Mis à jour chaque jour ouvré par la mise en ligne (data/taux.json),
+// servis par le site lui-même : aucun appel à un service tiers. Valeurs ci-dessous = secours hors ligne.
+let FX={source:"BCE",date:"2026-10-26",rates:{GBP:0.8382,CHF:0.9243,SEK:11.1385,DKK:7.4747,NOK:10.4545,PLN:4.4038,CZK:24.369,HUF:367.45,RON:5.3473,ISK:136.4}};
+fetch("data/taux.json",{cache:"no-cache"}).then(r=>r.ok?r.json():null).then(d=>{if(d&&d.rates&&d.date){FX=d; if(phase==="app") requestRender();}}).catch(()=>{});
+const fxRate=()=>CURC==="EUR"?1:(FX.rates[CURC]||0);
+const toEur=v=>v/(fxRate()||1);
+const fxDate=()=>dfmt(FX.date,{day:"numeric",month:"short",year:"numeric"});
+// montant « rond » dans la monnaie locale, à partir d'un montant en euros (plafonds, montants de test)
+const niceStep=v=>{const p=Math.pow(10,Math.floor(Math.log10(Math.max(v,1)))); return Math.max(1,Math.round(v/p)*p);};
+const inCur=v=>{const x=v*(fxRate()||1), d=DEC[CURC]??2; return d?r2(x):Math.round(x);};
+const inCurStr=v=>String(inCur(v)).replace(".",",");
+const trAmt=t=>t.amount??t.amountEur, fmT=t=>fmIn(trAmt(t),t.ucur||"EUR");
+
 /* ============ Afrique → Europe ============ */
 // Seules les monnaies à parité fixe avec l'euro sont ouvertes : le taux est connu à l'avance, sans risque de change.
 const CUR={XOF:{rate:655.957,label:"F CFA"},XAF:{rate:655.957,label:"F CFA"},KMF:{rate:491.96775,label:"FC"},CVE:{rate:110.265,label:"CVE"}};
-const METHODS={wave:"Wave",orange:"Orange Money",mtn:"MTN MoMo",moov:"Moov Money",airtel:"Airtel Money",bank:"Virement bancaire"};
+const METHODS={wave:"Wave",orange:"Orange Money",mtn:"MTN MoMo",moov:"Moov Money",airtel:"Airtel Money",telecel:"Telecel Money",sank:"Sank Money",bank:"Virement bancaire"};
 const COUNTRIES=[
   ["SN","Sénégal","XOF","+221",["wave","orange","bank"]],
   ["CI","Côte d'Ivoire","XOF","+225",["wave","orange","mtn","moov","bank"]],
   ["ML","Mali","XOF","+223",["orange","moov","wave","bank"]],
-  ["BF","Burkina Faso","XOF","+226",["orange","moov","wave","bank"]],
+  ["BF","Burkina Faso","XOF","+226",["orange","moov","wave","telecel","sank","bank"]],
   ["BJ","Bénin","XOF","+229",["mtn","moov","bank"]],
   ["TG","Togo","XOF","+228",["moov","bank"]],
   ["NE","Niger","XOF","+227",["airtel","moov","bank"]],
@@ -386,6 +418,7 @@ document.addEventListener("focusout",()=>setTimeout(()=>{if(dirty&&!isBusy()){di
 
 function render(){
   const app=$("#app"), nav=$("#nav");
+  setCurrency(phase==="onboarding"?(RES[ob.country]||RES.FR).cur:(S.profile&&S.profile.currency)||"EUR");
   const sub=phase!=="app"||tab==="transfert"||tab==="profil";
   document.body.classList.toggle("no-nav",sub);
   nav.hidden=sub;
@@ -506,6 +539,8 @@ function vOnboarding(){
   const out=mode!=="cloud"?`<button class="link" data-act="logout" style="align-self:center">Se déconnecter</button>`:"";
   if(st===0) return `<div class="onb">${dots}<h2>On commence par ce qui rentre.</h2><p class="muted">Ton salaire net et tes autres revenus réguliers, par mois. Trois questions et c'est prêt.</p>
     <div class="card">${displayName()?"":`<label class="f">Ton prénom<input class="in" id="obName" maxlength="40" autocomplete="given-name" value="${esc(ob.name)}"></label>`}
+    <label class="f">Pays de résidence${resSelect("obCountry",ob.country||"FR")}</label>
+    <p class="small muted" style="margin-top:-6px">L'appli affiche tout en ${CUR_NAME[CURC]||CURC} (${curSym()}).</p>
     <label class="f">Revenus nets par mois<input class="in num" id="obIncome" inputmode="decimal" placeholder="ex. 1 850" value="${esc(ob.income)}"></label>
     <div class="err" id="obErr"></div><button class="btn pri block" data-ob="next">Continuer</button></div>
     <button class="link" data-act="import" style="align-self:center">J'ai déjà une sauvegarde à importer</button>${out}</div>`;
@@ -538,7 +573,8 @@ async function obFinish(){
   const potId=uid();
   phase="app"; tab="accueil";
   write("pots",potId,{id:potId,name:"Coussin de sécurité",target:Math.round((fix+avail)*3/50)*50||1000,deadline:"",balance:0,moves:[],color:PALETTE[0],createdAt:Date.now()});
-  write("profile","profile",{v:2,name:ob.name||(user&&user.name)||"",income:inc,fixed:fix,save:sav,categories:cats,createdAt:Date.now()});
+  const country=RES[ob.country]?ob.country:"FR";
+  write("profile","profile",{v:2,name:ob.name||(user&&user.name)||"",country,currency:RES[country].cur,income:inc,fixed:fix,save:sav,categories:cats,createdAt:Date.now()});
   render(); toast("Ton budget est prêt"); haptic(HAP.ok); setTimeout(()=>burst($(".bal")),250);
 }
 
@@ -557,9 +593,9 @@ function notifs(c){
   if(c.prevPending) out.push({ic:I.alert,t:`Bilan de ${monthName(c.prevMk)} : choisis quoi faire de ${c.prevDiff>0?"ton dépassement":"ce qui reste"}.`,a:'data-tab="accueil"'});
   if(c.leftWeek<0) out.push({ic:I.alert,t:`Semaine dépassée de ${fm0(-c.leftWeek)}.`,a:'data-tab="budget"'});
   c.wishes.filter(w=>w.status==="wait"&&now-w.created>=H48).forEach(w=>out.push({ic:I.clock,t:`Les 48 h sont passées pour « ${esc(w.name)} » : à toi de décider.`,a:'data-tab="envies"'}));
-  c.transfers.filter(t=>t.status==="credited"&&now-(t.statusAt||0)<3*864e5).forEach(t=>out.push({ic:I.down,t:`${fm(t.amountEur)} reçus de ${esc(first(t.senderName))}.`,a:`data-tr="${t.id}"`}));
+  c.transfers.filter(t=>t.status==="credited"&&now-(t.statusAt||0)<3*864e5).forEach(t=>out.push({ic:I.down,t:`${fmT(t)} reçus de ${esc(first(t.senderName))}.`,a:`data-tr="${t.id}"`}));
   Object.values(S.tx).filter(t=>t.card&&now-(t.createdAt||0)<864e5).forEach(t=>out.push({ic:I.card,t:`Paiement de ${fm(t.amount)} chez ${esc(t.note)} avec ta carte •• ${esc(t.last4||"")}.`,a:'data-tab="cartes"'}));
-  c.transfers.filter(t=>t.status==="created").forEach(t=>out.push({ic:I.globe,t:`${esc(first(t.senderName))} n'a pas encore payé ta demande de ${fm(t.amountEur)}.`,a:`data-tr="${t.id}"`}));
+  c.transfers.filter(t=>t.status==="created").forEach(t=>out.push({ic:I.globe,t:`${esc(first(t.senderName))} n'a pas encore payé ta demande de ${fmT(t)}.`,a:`data-tr="${t.id}"`}));
   return out;
 }
 function vHome(c){
@@ -652,7 +688,7 @@ function trRow(t){
   const st=STATUS[t.status]||STATUS.created, ok=t.status==="credited", dead=t.status==="cancelled"||t.status==="expired";
   return `<button class="tx" data-tr="${t.id}"><span class="ic">${I.down}</span>
     <span class="t"><b>${ok?"Reçu de":"Demande à"} ${esc(t.senderName)}</b><span>${esc(t.ref)} · ${esc(country(t.country).name)}</span></span>
-    <span class="r"><span class="amt ${ok?"pos":dead?"dead":"pend"} num">+${fm(t.amountEur)}</span>${ok?`<span class="tm">${timeOf(t.statusAt||t.createdAt)}</span>`:`<span class="chip ${st[1]}">${st[0]}</span>`}</span></button>`;
+    <span class="r"><span class="amt ${ok?"pos":dead?"dead":"pend"} num">+${fmT(t)}</span>${ok?`<span class="tm">${timeOf(t.statusAt||t.createdAt)}</span>`:`<span class="chip ${st[1]}">${st[0]}</span>`}</span></button>`;
 }
 
 /* ---------- budget ---------- */
@@ -797,15 +833,17 @@ function vWishes(c){
 /* ---------- recevoir d'Afrique ---------- */
 function quote(){
   const ct=rx.contact&&S.contacts[rx.contact], co=country(ct?ct.country:rx.country), rate=CUR[co.cur].rate;
-  const n=parseAmt(rx.str)||0; let eurAmt,fee,local;
-  if(rx.cur==="EUR"){eurAmt=r2(n); fee=feeFor(eurAmt); local=eurAmt>0?Math.ceil(r2(eurAmt+fee)*rate):0;}
+  // F CFA ↔ euro : parité fixe ; euro ↔ monnaie de l'utilisateur : taux de référence BCE (1 si euro). Frais définis en euros.
+  const r=fxRate()||1, d=DEC[CURC]??2, down=v=>d?Math.floor(v*100+1e-6)/100:Math.floor(v+1e-6);
+  const n=parseAmt(rx.str)||0; let recv,eurAmt,fee,local;
+  if(rx.cur==="EUR"){recv=d?r2(n):Math.round(n); eurAmt=recv/r; const fe=feeFor(eurAmt); fee=d?r2(fe*r):Math.round(fe*r); local=recv>0?Math.ceil(r2(eurAmt+fe)*rate):0;}
   else{
     // l'expéditeur paie un montant en monnaie locale : on en déduit ce que tu reçois, frais retirés
     local=Math.round(n); const tot=local/rate, pct=CFG.transferFeePct||0, min=CFG.transferFeeMin||0;
     let e=tot/(1+pct); if(e*pct<min) e=tot-min;
-    eurAmt=Math.max(0,Math.floor(e*100+1e-6)/100); fee=eurAmt>0?r2(tot-eurAmt):0;
+    eurAmt=Math.max(0,e); recv=Math.max(0,down(eurAmt*r)); fee=recv>0?(d?r2((tot-eurAmt)*r):Math.round((tot-eurAmt)*r)):0;
   }
-  return {co,ct,rate,eur:eurAmt,fee,local,who:ct?first(ct.name):"L'expéditeur"};
+  return {co,ct,rate,r,eur:recv,eurAmt:r2(eurAmt),fee,local,who:ct?first(ct.name):"L'expéditeur"};
 }
 function typed(s,dec){
   if(!s) return dec?`0<span class="ghost">,00</span>`:"0";
@@ -815,18 +853,18 @@ function typed(s,dec){
 }
 function rxUpdate(){
   const el=$("#rxAmt"); if(!el) return;
-  const q=quote(), lab=CUR[q.co.cur].label, max=CFG.transferMax||1000, p=Math.min(1,q.eur/max), over=q.eur>max;
-  el.innerHTML=rx.cur==="EUR"?`${typed(rx.str,2)} €`:`${typed(rx.str,0)} ${lab}`;
-  const rate=`1 € = ${nf5.format(q.rate)} ${lab}, parité fixe`;
+  const q=quote(), lab=CUR[q.co.cur].label, max=CFG.transferMax||1000, p=Math.min(1,q.eurAmt/max), over=q.eurAmt>max+1e-9;
+  el.innerHTML=rx.cur==="EUR"?`${typed(rx.str,DEC[CURC]??2)} ${curSym()}`:`${typed(rx.str,0)} ${lab}`;
+  const rate=CURC==="EUR"?`1 € = ${nf5.format(q.rate)} ${lab}, parité fixe`:`1 ${curSym()} = ${nf5.format(q.rate/q.r)} ${lab} · taux BCE du ${fxDate()}, sans marge`;
   $("#rxConv").innerHTML=q.eur>0
     ?(rx.cur==="EUR"?`${esc(q.who)} paie <b>${fmLocal(q.local,q.co.cur)}</b>`:`Tu reçois <b>${fm(q.eur)}</b>`)+` · frais ${fm(q.fee)}<br><span class="muted">${rate}</span>`
     :`<span class="muted">${rate}</span>`;
-  $("#rxLim").innerHTML=`<div class="lim-head"><span>Plafond par demande</span><span class="num">${fm0(max)}</span></div>
+  $("#rxLim").innerHTML=`<div class="lim-head"><span>Plafond par demande</span><span class="num">${fm0(inCur(max))}</span></div>
     <div class="slider ${over?"over":""}"><i style="width:${p*100}%"></i><b style="left:${p*100}%"></b></div>
-    ${over?`<div class="err">Le plafond est de ${fm0(max)} par demande.</div>`:""}`;
+    ${over?`<div class="err">Le plafond est de ${fm0(inCur(max))} par demande.</div>`:""}`;
 }
 function rxKey(k){
-  let s=rx.str; const dec=rx.cur==="EUR"?2:0;
+  let s=rx.str; const dec=rx.cur==="EUR"?(DEC[CURC]??2):0;
   if(k==="del") s=s.slice(0,-1);
   else if(k===","){ if(dec&&!s.includes(",")) s=(s||"0")+","; }
   else{
@@ -859,10 +897,11 @@ function vTransfer(c){
   </div>
   <div class="amt-zone">
     <div class="amt-big num" id="rxAmt" aria-live="polite"></div>
-    <button class="cur-sw" data-act="swapcur">${rx.cur==="EUR"?`Saisir ce que paie l'expéditeur (${esc(lab)})`:"Saisir ce que je reçois (€)"}</button>
+    <button class="cur-sw" data-act="swapcur">${rx.cur==="EUR"?`Saisir ce que paie l'expéditeur (${esc(lab)})`:`Saisir ce que je reçois (${curSym()})`}</button>
     <div class="conv" id="rxConv"></div>
   </div>
   <div class="limit" id="rxLim"></div>
+  ${CURC!=="EUR"&&!fxRate()?`<div class="alert w">${I.alert}<span>Taux de change indisponible pour ${CURC}. Réessaie plus tard.</span></div>`:""}
   ${secHead("Expéditeurs",contacts.length?`<button class="pill" data-tab="profil">Gérer ${I.chevR}</button>`:"")}
   <div class="chips"><button class="add-chip" data-act="newcontact" aria-label="Ajouter un expéditeur">${I.plus}</button>
     ${contacts.length?contacts.map(x=>contactChip(x,x.id===rx.contact)).join(""):`<p class="chips-hint">Ajoute la personne qui va t'envoyer l'argent.</p>`}</div>
@@ -874,8 +913,9 @@ function rxSubmit(){
   const q=quote(), c=calc();
   if(!q.ct){toast("Choisis d'abord qui t'envoie l'argent."); contactSheet(); return;}
   if(!(q.eur>0)){toast("Indique un montant."); return;}
-  if(q.eur>CFG.transferMax){toast(`Le plafond est de ${fm0(CFG.transferMax)} par demande.`); return;}
-  if(c.trMonth+q.eur>CFG.transferMonthlyMax){toast(`Plafond du mois atteint : ${fm0(CFG.transferMonthlyMax)} au maximum, dont ${fm0(c.trMonth)} déjà demandés.`); return;}
+  if(!fxRate()){toast("Taux de change indisponible. Réessaie plus tard."); return;}
+  if(q.eurAmt>CFG.transferMax+1e-9){toast(`Le plafond est de ${fm0(inCur(CFG.transferMax))} par demande.`); return;}
+  if(c.trMonth+q.eurAmt>CFG.transferMonthlyMax+1e-9){toast(`Plafond du mois atteint : ${fm0(inCur(CFG.transferMonthlyMax))} au maximum, dont ${fm0(inCur(c.trMonth))} déjà demandés.`); return;}
   if(!(S.profile.kyc&&S.profile.kyc.status==="verified")){kycSheet(()=>confirmSheet(q)); return;}
   confirmSheet(q);
 }
@@ -895,7 +935,8 @@ function confirmSheet(q){
     <div class="recap">
       ${recapLine("Tu reçois",fm(q.eur))}
       ${recapLine("Frais, payés par l'expéditeur",fm(q.fee)+(DEMO?" (exemple)":""))}
-      ${recapLine("Taux de change",`1 € = ${nf5.format(q.rate)} ${lab}`)}
+      ${recapLine("Taux de change",CURC==="EUR"?`1 € = ${nf5.format(q.rate)} ${lab}`:`1 ${curSym()} = ${nf5.format(q.rate/q.r)} ${lab}`)}
+      ${CURC==="EUR"?"":recapLine("Conversion",`F CFA → euro à parité fixe, puis euro → ${CURC} au taux BCE du ${fxDate()}, sans marge`)}
       ${recapLine(esc(q.who)+" paie",fmLocal(q.local,q.co.cur))}
       ${recapLine("Avec",`${esc(METHODS[q.ct.method])} · ${esc(q.co.name)}`)}
       ${recapLine("Expéditeur",`${esc(q.ct.name)} · ${esc(q.co.dial)} ${maskPhone(q.ct.phone)}`)}
@@ -904,17 +945,21 @@ function confirmSheet(q){
     <label class="f">Motif du transfert<select class="in" id="cfPurpose"><option value="">Choisir…</option>${PURPOSES.map(p=>`<option>${esc(p)}</option>`).join("")}</select></label>
     ${big?`<div class="nudge">Montant élevé : la banque ou l'opérateur de ${esc(q.who)} peut lui demander des justificatifs (contrôle des changes).</div>`
       :`<p class="small muted">Selon le pays et le montant, la banque ou l'opérateur de l'expéditeur peut demander des justificatifs (contrôle des changes).</p>`}
+    <div id="cfStudy"></div>
     <label class="chk"><input type="checkbox" id="cfOk"><span>Je connais personnellement ${esc(q.ct.name)} et cet argent a une origine légale.</span></label>
     <div class="nudge d"><b>Attention aux arnaques.</b> Ne reçois jamais d'argent pour le compte d'une personne que tu ne connais pas, même contre une commission.</div>
     <div class="err" id="cfErr"></div>
     <div class="row"><button class="btn ghost" data-close>Annuler</button><button class="btn pri" style="flex:1" id="cfGo">Créer la demande</button></div>`,()=>{
+    const study=()=>{const on=/scolarité|études/i.test($("#cfPurpose").value);
+      $("#cfStudy").innerHTML=on?`<div class="nudge"><b>Frais d'études : prépare les justificatifs.</b> La banque de ${esc(q.who)} peut demander ton attestation d'inscription, ton titre de séjour et le détail des frais (contrôle des changes).${q.co.code==="BF"?` <br><b>Burkina Faso :</b> depuis un décret du 25 juin 2026, les étudiants burkinabè doivent obtenir une autorisation du ministère de l'Enseignement supérieur pour étudier à l'étranger. Garde-la à portée de main : elle peut appuyer le dossier.`:""}</div>`:"";};
+    $("#cfPurpose").addEventListener("change",study);
     $("#cfGo").onclick=()=>{
       const purpose=$("#cfPurpose").value;
       if(!purpose){$("#cfErr").textContent="Choisis le motif du transfert.";return;}
       if(!$("#cfOk").checked){$("#cfErr").textContent="Coche la case pour confirmer.";return;}
       const id=uid(), now=Date.now();
       write("transfers",id,{id,ref:makeRef(),contactId:q.ct.id,senderName:q.ct.name,senderPhone:q.ct.phone,country:q.co.code,currency:q.co.cur,method:q.ct.method,
-        amountEur:q.eur,fee:q.fee,rate:q.rate,localAmount:q.local,purpose,relation:q.ct.relation||"",status:"created",createdAt:now,statusAt:now,history:[{s:"created",t:now}],demo:DEMO});
+        amountEur:q.eurAmt,amount:q.eur,ucur:CURC,fx:q.r,fxDate:FX.date,fee:q.fee,rate:q.rate,localAmount:q.local,purpose,relation:q.ct.relation||"",status:"created",createdAt:now,statusAt:now,history:[{s:"created",t:now}],demo:DEMO});
       write("contacts",q.ct.id,{...q.ct,usedAt:now});
       rx.str=""; closeModal(); render(); shareSheet(id);
     };
@@ -925,11 +970,11 @@ function makeRef(){
   const s=[...b].map(x=>A[x%A.length]).join(""); return "CPY-"+s.slice(0,4)+"-"+s.slice(4);
 }
 function payerLink(t){
-  const d={r:t.ref,n:first(displayName())||"Ton proche",e:t.amountEur,l:t.localAmount,c:t.currency,m:t.method,k:t.country,d:t.demo?1:0};
+  const d={r:t.ref,n:first(displayName())||"Ton proche",e:trAmt(t),u:t.ucur||"EUR",l:t.localAmount,c:t.currency,m:t.method,k:t.country,d:t.demo?1:0};
   return location.origin+location.pathname+"#payer="+b64e(JSON.stringify(d));
 }
 function shareText(t,link){
-  return `Bonjour ${first(t.senderName)}, voici ma demande CauriPay de ${fm(t.amountEur)} : tu paies ${fmLocal(t.localAmount,t.currency)} avec ${METHODS[t.method]}. Référence ${t.ref}.\n${link}`
+  return `Bonjour ${first(t.senderName)}, voici ma demande CauriPay de ${fmT(t)} : tu paies ${fmLocal(t.localAmount,t.currency)} avec ${METHODS[t.method]}. Référence ${t.ref}.\n${link}`
     +(t.demo?"\n(Démonstration : ne paie rien.)":"");
 }
 function shareSheet(id){
@@ -951,7 +996,7 @@ function transferSheet(id){
   const t=trView(raw), hist={}; (t.history||[]).forEach(h=>hist[h.s]=h.t);
   const steps=[["created","Demande créée"],["paid","Payée par l'expéditeur"],["checking","Vérifications légales"],["credited","Argent reçu sur ton compte CauriPay"]];
   const dead=t.status==="cancelled"||t.status==="expired", idx=steps.findIndex(s=>s[0]===t.status);
-  openModal(`<div class="row" style="justify-content:space-between"><h2>${t.status==="credited"?"Argent reçu":"Demande"} · <span class="num">${fm(t.amountEur)}</span></h2><span class="chip ${STATUS[t.status][1]}">${STATUS[t.status][0]}</span></div>
+  openModal(`<div class="row" style="justify-content:space-between"><h2>${t.status==="credited"?"Argent reçu":"Demande"} · <span class="num">${fmT(t)}</span></h2><span class="chip ${STATUS[t.status][1]}">${STATUS[t.status][0]}</span></div>
     ${dead?`<div class="alert w">${I.alert}<span>${t.status==="expired"?"Cette demande a expiré sans être payée.":"Cette demande a été annulée."}</span></div>`
       :`<ol class="timeline">${steps.map((s,i)=>`<li class="${i<=idx?"done":i===idx+1?"cur":""}">${s[1]}${hist[s[0]]?`<small>${new Date(hist[s[0]]).toLocaleString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</small>`:""}</li>`).join("")}</ol>`}
     <div class="recap">
@@ -959,7 +1004,7 @@ function transferSheet(id){
       ${recapLine("Expéditeur",esc(t.senderName))}
       ${recapLine("Depuis",`${esc(country(t.country).name)} · ${esc(METHODS[t.method])}`)}
       ${recapLine("Montant payé",fmLocal(t.localAmount,t.currency))}
-      ${recapLine("Frais",fm(t.fee))}
+      ${recapLine("Frais",fmIn(t.fee,t.ucur||"EUR"))}
       ${recapLine("Motif",esc(t.purpose||"—"))}
     </div>
     ${t.status==="created"?`<div class="row"><button class="btn ghost" data-cancel-tr="${t.id}" style="color:var(--danger)">Annuler</button><button class="btn pri" style="flex:1" data-share-tr="${t.id}">Renvoyer le lien</button></div>
@@ -971,11 +1016,11 @@ function transferSheet(id){
 function advance(id,s){
   const t=S.transfers[id]; if(!t||t.status==="cancelled"||t.status==="credited") return;
   const now=Date.now(); write("transfers",id,{...t,status:s,statusAt:now,history:[...(t.history||[]),{s,t:now}]});
-  if(s==="credited"){creditWallet(t); toast(`${fm(t.amountEur)} reçus de ${first(t.senderName)}`); haptic(HAP.ok); if(phase==="app") burst();}
+  if(s==="credited"){creditWallet(t); toast(`${fmT(t)} reçus de ${first(t.senderName)}`); haptic(HAP.ok); if(phase==="app") burst();}
   requestRender();
 }
 // l'argent reçu arrive sur le compte CauriPay (une seule fois par transfert)
-function creditWallet(t){const wid="tr"+t.id; if(!S.wallet[wid]) write("wallet",wid,{id:wid,amt:t.amountEur,kind:"transfer",note:"Reçu de "+t.senderName,at:Date.now()});}
+function creditWallet(t){const wid="tr"+t.id; if(!S.wallet[wid]) write("wallet",wid,{id:wid,amt:trAmt(t),kind:"transfer",note:"Reçu de "+t.senderName,at:Date.now()});}
 function simulate(id){advance(id,"paid"); setTimeout(()=>advance(id,"checking"),1600); setTimeout(()=>advance(id,"credited"),3800);}
 function tickDemo(){Object.values(S.transfers).forEach(t=>{if(t.status==="credited") creditWallet(t);}); Object.values(S.transfers).forEach(t=>{if(t.demo&&(t.status==="paid"||t.status==="checking")&&Date.now()-(t.statusAt||0)>5000) advance(t.id,"credited");});}
 function contactSheet(id){
@@ -1019,6 +1064,7 @@ function infoSheet(){
       <li><b>Tu reçois des euros</b> une fois les vérifications légales passées.</li>
     </ol>
     <p class="small muted">On commence par la zone franc CFA, les Comores et le Cap-Vert : leur monnaie est liée à l'euro par un taux fixe, donc le montant est connu d'avance. Les pays à taux variable arriveront ensuite.</p>
+    ${CURC!=="EUR"?`<p class="small muted">Tu vis hors zone euro : la conversion euro → ${CURC} se fait au taux de référence de la Banque centrale européenne du jour (${fxDate()}), affiché avant chaque demande.</p>`:""}
     ${DEMO?`<div class="nudge">Version de démonstration. En réel, l'argent est encaissé et versé par un établissement de paiement agréé, partenaire de CauriPay.</div>`:""}
     <button class="btn pri block" data-close>Compris</button>`);
 }
@@ -1039,6 +1085,7 @@ function vProfile(c){
     <div class="card-head"><h2>Mon mois type</h2></div>
     <div style="display:flex;flex-direction:column;gap:12px">
       <label class="f">Prénom<input class="in" data-pf-text="name" maxlength="40" value="${esc(name)}"></label>
+      <label class="f">Pays de résidence${resSelect("pfCountry",P.country||"FR",'data-pf-country="1"')}</label>
       <label class="f">Revenus nets par mois<input class="in num" data-pf="income" inputmode="decimal" value="${P.income||""}"></label>
       <label class="f">Charges fixes par mois<input class="in num" data-pf="fixed" inputmode="decimal" value="${P.fixed||""}"></label>
       <label class="f">Épargne par mois<input class="in num" data-pf="save" inputmode="decimal" value="${P.save||""}"></label>
@@ -1056,7 +1103,7 @@ function vProfile(c){
   <div class="card">
     <div class="card-head"><h2>Catégories et budgets</h2><span class="small muted num">${fm0((P.categories||[]).reduce((a,k)=>a+(+k.budget||0),0))} / ${fm0(c.avail)}</span></div>
     <div style="display:flex;flex-direction:column;gap:8px">
-      ${(P.categories||[]).map(k=>`<div class="catedit"><span class="dot" style="background:${col(k.color)}"></span><input class="in" data-cat-name="${k.id}" value="${esc(k.name)}" maxlength="24" aria-label="Nom"><input class="in num" data-cat-budget="${k.id}" inputmode="decimal" value="${k.budget||""}" placeholder="€" aria-label="Budget"><button class="iconbtn" data-del-cat="${k.id}" aria-label="Supprimer ${esc(k.name)}">${I.trash}</button></div>`).join("")}
+      ${(P.categories||[]).map(k=>`<div class="catedit"><span class="dot" style="background:${col(k.color)}"></span><input class="in" data-cat-name="${k.id}" value="${esc(k.name)}" maxlength="24" aria-label="Nom"><input class="in num" data-cat-budget="${k.id}" inputmode="decimal" value="${k.budget||""}" placeholder="${curSym()}" aria-label="Budget"><button class="iconbtn" data-del-cat="${k.id}" aria-label="Supprimer ${esc(k.name)}">${I.trash}</button></div>`).join("")}
     </div>
     <div class="row" style="margin-top:12px"><button class="btn ghost" data-act="addcat">Ajouter une catégorie</button><button class="btn ghost" data-act="autobudget">Répartir automatiquement</button></div>
   </div>
@@ -1090,7 +1137,7 @@ function vPayer(){
     <div class="from-card">
       <div class="fc-head"><span>Demande de ${esc(d.n)}</span><span class="pill-dk">${esc(d.r)}</span></div>
       <div class="bal-amt num" style="margin-top:12px">${fmLocal(d.l,d.c)}</div>
-      <div class="small" style="font-weight:600;margin-top:6px">${esc(d.n)} reçoit ${fm(d.e)} en Europe. Les frais sont compris.</div>
+      <div class="small" style="font-weight:600;margin-top:6px">${esc(d.n)} reçoit ${fmIn(d.e,d.u||"EUR")} en Europe. Les frais sont compris.</div>
     </div>
     <div class="auth-card"><h2>Comment payer</h2>
       <ol class="steps-list"><li>Ouvre ${esc(METHODS[d.m]||"ton application de paiement")}.</li><li>Paie <b>${fmLocal(d.l,d.c)}</b> en indiquant la référence <b>${esc(d.r)}</b>.</li><li>${esc(d.n)} reçoit une notification dès que l'argent arrive.</li></ol>
@@ -1124,6 +1171,8 @@ const liveCards=()=>Object.values(S.cards).filter(k=>k.status!=="closed").sort((
 const activeCard=()=>{const k=S.cards[cardSel]; return k&&k.status==="active"?k:liveCards().find(x=>x.status==="active")||null;};
 const kycOk=()=>!!(S.profile&&S.profile.kyc&&S.profile.kyc.status==="verified");
 function cardSpent(id){const mk=todayIso().slice(0,7); return sum(Object.values(S.tx).filter(t=>t.card===id&&t.date&&t.date.slice(0,7)===mk));}
+// curseur de plafond : de ≈ 50 € à ≈ 3 000 €, converti dans la monnaie de l'utilisateur
+const limRange=(id,v)=>{const st=niceStep(inCur(50)); return `<input type="range" class="range" id="${id}" min="${st}" max="${Math.round(inCur(3000)/st)*st}" step="${st}" value="${v}">`;};
 const sw=(id,title,sub,on,dis)=>`<label class="sw"><span><b>${title}</b><small>${sub}</small></span><input type="checkbox" role="switch" id="${id}" ${on?"checked":""} ${dis?"disabled":""}><i aria-hidden="true"></i></label>`;
 const pwBox=(id,ph)=>`<span class="pw"><input class="in" id="${id}" type="password" autocomplete="current-password" placeholder="${ph||""}" aria-label="Mot de passe"><button type="button" class="pw-eye" data-eye="${id}" aria-label="Afficher le mot de passe" aria-pressed="false">${I.eye}</button></span>`;
 
@@ -1203,7 +1252,8 @@ function cardsAfterRender(){
 function newCardFlow(){
   if(liveCards().filter(k=>k.status==="active").length>=MAX_CARDS){toast(`Tu peux avoir ${MAX_CARDS} cartes actives au maximum.`);return;}
   if(!kycOk()){kycSheet(newCardFlow);return;}   // identité vérifiée obligatoire avant d'émettre une carte
-  cw={step:0,type:"virtual",design:"citron",holder:(displayName()||"").toUpperCase(),name:"",limit:500,online:true,nfc:true,abroad:false};
+  const st=niceStep(inCur(50));
+  cw={step:0,type:"virtual",design:"citron",holder:(displayName()||"").toUpperCase(),name:"",limit:Math.round(inCur(500)/st)*st,online:true,nfc:true,abroad:false};
   wizard(1);
 }
 function wizard(dir){
@@ -1224,7 +1274,7 @@ function wizard(dir){
     <div class="err" id="cwErr"></div>
     <div class="row">${back}${next}</div>`;
   if(st===2) body=`<h2>Règle ta carte</h2>
-    <label class="f">Plafond par mois : <b id="cwLimV" style="color:var(--ink)">${fm0(cw.limit)}</b><input type="range" class="range" id="cwLim" min="50" max="3000" step="50" value="${cw.limit}"></label>
+    <label class="f">Plafond par mois : <b id="cwLimV" style="color:var(--ink)">${fm0(cw.limit)}</b>${limRange("cwLim",cw.limit)}</label>
     <div>${sw("cwOnline","Paiements en ligne","Chaque achat est validé dans CauriPay (3-D Secure)",cw.online)}
       ${sw("cwNfc","Sans contact",single?"Pas disponible sur une carte à usage unique":"Avec ton téléphone, en magasin",!single&&cw.nfc,single)}
       ${sw("cwAbroad","Paiements hors zone euro","Désactivés par défaut, par sécurité",cw.abroad)}</div>
@@ -1323,7 +1373,7 @@ function paySheet(k,ch){
       <div class="nfc-rings"><i></i><i></i><i></i><span id="payIco">${nfc?I.nfc:I.cart}</span></div>
       <p id="payMsg">${nfc?`<b>Prêt à payer</b><br><span class="muted">Approche le haut de ton téléphone du terminal.</span>`:`<b>Achat sur un site marchand</b><br><span class="muted">Tu le valideras ici : c'est le 3-D Secure.</span>`}</p></div>
     <div id="payAuth" class="pay-auth" hidden></div>
-    ${DEMO?`<label class="f">Montant du test<input class="in num" id="payAmt" inputmode="decimal" autocomplete="off" value="${nfc?"12,50":"39,90"}"></label>
+    ${DEMO?`<label class="f">Montant du test<input class="in num" id="payAmt" inputmode="decimal" autocomplete="off" value="${inCurStr(nfc?12.5:39.9)}"></label>
       <button class="btn pri block" id="payGo">${nfc?"Simuler le passage au terminal":"Simuler l'achat"}</button>
       <p class="small muted">${nfc?"Démonstration : une page web ne peut pas utiliser la puce NFC du téléphone. En réel, la carte CauriPay s'ajoute à Apple Pay ou Google Pay.":"Démonstration : aucun site ne débite cette carte."}</p>`:""}
     <button class="btn ghost block" data-close>Fermer</button>`,()=>{const g=$("#payGo"); if(g) g.onclick=()=>payFlow(k.id,ch);},"pay");
@@ -1361,8 +1411,9 @@ async function payFlow(id,ch){
   let k=S.cards[id], why=chargeCheck(k,amount,ch);
   if(why){setPay("err",`<b>Paiement refusé</b><br><span class="muted">${why}</span>`); haptic(HAP.err); go.disabled=false; return;}
   const since=k.nfcSince||{sum:0,count:0}; let sca=false;
-  if(ch==="online"||amount>NFC_ONE||since.sum+amount>NFC_SUM||since.count>=NFC_COUNT){
-    setPay("auth",`<b>Confirme ce paiement</b><br><span class="muted">${ch==="online"?`3-D Secure : ${fm(amount)} chez ${esc(merchant)}.`:`Au-delà de ${NFC_ONE} € par paiement, de ${NFC_SUM} € cumulés ou de ${NFC_COUNT} paiements d'affilée, ton identité doit être vérifiée.`}</span>`);
+  // seuils légaux fixés en euros : on compare en euros
+  if(ch==="online"||toEur(amount)>NFC_ONE||toEur(since.sum+amount)>NFC_SUM||since.count>=NFC_COUNT){
+    setPay("auth",`<b>Confirme ce paiement</b><br><span class="muted">${ch==="online"?`3-D Secure : ${fm(amount)} chez ${esc(merchant)}.`:`Au-delà de ${fm0(inCur(NFC_ONE))} par paiement, de ${fm0(inCur(NFC_SUM))} cumulés ou de ${NFC_COUNT} paiements d'affilée, ton identité doit être vérifiée.`}</span>`);
     sca=await scaStep();
     if(!$("#payZone")) return;
     if(!sca){setPay("err","<b>Paiement annulé</b>"); go.disabled=false; return;}
@@ -1378,9 +1429,9 @@ async function payFlow(id,ch){
 function limitsSheet(k){
   const single=k.type==="single";
   openModal(`<h2>Plafonds et usages</h2>
-    <label class="f">Plafond par mois : <b id="lmV" style="color:var(--ink)">${fm0(k.limit)}</b><input type="range" class="range" id="lmLim" min="50" max="3000" step="50" value="${k.limit}"></label>
+    <label class="f">Plafond par mois : <b id="lmV" style="color:var(--ink)">${fm0(k.limit)}</b>${limRange("lmLim",k.limit)}</label>
     <div>${sw("lmOnline","Paiements en ligne","Validés dans CauriPay (3-D Secure)",k.online)}${sw("lmNfc","Sans contact",single?"Pas disponible sur une carte à usage unique":"Avec ton téléphone, en magasin",k.nfc,single)}${sw("lmAbroad","Paiements hors zone euro","Désactivés par défaut, par sécurité",k.abroad)}</div>
-    <p class="small muted">Sans contact : au-delà de ${NFC_ONE} € par paiement, de ${NFC_SUM} € cumulés ou de ${NFC_COUNT} paiements d'affilée, CauriPay te demande de confirmer ton identité.</p>
+    <p class="small muted">Sans contact : au-delà de ${fm0(inCur(NFC_ONE))} par paiement, de ${fm0(inCur(NFC_SUM))} cumulés ou de ${NFC_COUNT} paiements d'affilée, CauriPay te demande de confirmer ton identité.</p>
     <div class="row"><button class="btn ghost" data-close>Annuler</button><button class="btn pri" style="flex:1" id="lmSave">Enregistrer</button></div>`,()=>{
     $("#lmLim").addEventListener("input",e=>{$("#lmV").textContent=fm0(+e.target.value);});
     $("#lmSave").onclick=()=>{write("cards",k.id,{...S.cards[k.id],limit:+$("#lmLim").value,online:$("#lmOnline").checked,nfc:!single&&$("#lmNfc").checked,abroad:$("#lmAbroad").checked});
@@ -1390,14 +1441,14 @@ function limitsSheet(k){
 function topupSheet(){
   openModal(`<h2>Recharger mon compte</h2>
     <p class="small muted">L'argent reçu d'Afrique arrive directement sur ton compte CauriPay. Tu peux aussi ajouter un montant de démonstration.</p>
-    <div class="amt-in"><input class="num" id="tuAmt" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Montant"><span>€</span></div>
-    <div class="row" style="justify-content:center">${[20,50,100,200].map(a=>`<button type="button" class="btn sm" data-q="${a}">${a} €</button>`).join("")}</div>
+    <div class="amt-in"><input class="num" id="tuAmt" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Montant"><span>${curSym()}</span></div>
+    <div class="row" style="justify-content:center">${[20,50,100,200].map(a=>niceStep(inCur(a))).map(a=>`<button type="button" class="btn sm" data-q="${a}">${fm0(a)}</button>`).join("")}</div>
     <div class="err" id="tuErr"></div>
     <div class="row"><button class="btn ghost" data-act="receive">Recevoir d'Afrique</button><button class="btn pri" style="flex:1" id="tuGo">Recharger${DEMO?" (démo)":""}</button></div>`,()=>{
     $("#scrim").addEventListener("click",e=>{const q=e.target.closest("[data-q]"); if(q){$("#tuAmt").value=q.dataset.q; haptic(HAP.tap);}});
     $("#tuGo").onclick=()=>{const a=parseAmt($("#tuAmt").value);
       if(!(a>0)){$("#tuErr").textContent="Indique un montant supérieur à 0.";return;}
-      if(a>1000){$("#tuErr").textContent="1 000 € au maximum par recharge.";return;}
+      if(a>inCur(1000)){$("#tuErr").textContent=`${fm0(inCur(1000))} au maximum par recharge.`;return;}
       const id=uid(); write("wallet",id,{id,amt:a,kind:"topup",note:"Recharge de démonstration",at:Date.now()});
       closeModal(); render(); haptic(HAP.ok); burst(); toast(`${fm(a)} ajoutés à ton compte`);};
     setTimeout(()=>{const i=$("#tuAmt"); if(i) i.focus();},60);
@@ -1483,7 +1534,7 @@ function expenseSheet(existing){
   const P=S.profile; const t=existing||{};
   let kind=t.kind||"besoin", cat=t.cat||P.categories[0]?.id;
   openModal(`<h2>${existing?"Modifier la dépense":"Nouvelle dépense"}</h2>
-    <div class="amt-in"><input class="num" id="exAmt" inputmode="decimal" placeholder="0" value="${existing?String(t.amount).replace(".",","):""}" autocomplete="off" aria-label="Montant"><span>€</span></div>
+    <div class="amt-in"><input class="num" id="exAmt" inputmode="decimal" placeholder="0" value="${existing?String(t.amount).replace(".",","):""}" autocomplete="off" aria-label="Montant"><span>${curSym()}</span></div>
     <div class="seg" role="group" aria-label="Type de dépense"><button type="button" data-kind="besoin">Besoin</button><button type="button" data-kind="envie">Envie</button></div>
     <div id="nudge" style="display:flex;flex-direction:column;gap:8px"></div>
     <div><div class="eyebrow" style="margin-bottom:8px">Catégorie</div><div class="cats">${P.categories.map(k=>`<button type="button" data-cat="${k.id}"><span class="dot" style="background:${col(k.color)}"></span>${esc(k.name)}</button>`).join("")}</div></div>
@@ -1524,8 +1575,8 @@ function potMoveSheet(potId,dir,preset){
   if(!pots.length){potEditSheet();return;}
   let sel=potId||pots[0].id;
   openModal(`<h2>${dir>0?"Mettre de côté":"Retirer de l'argent"}</h2>
-    <div class="amt-in"><input class="num" id="pmAmt" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Montant" value="${preset?String(r2(preset)).replace(".",","):""}"><span>€</span></div>
-    <div class="row" style="justify-content:center">${[10,20,50,100].map(a=>`<button type="button" class="btn sm" data-q="${a}">${a} €</button>`).join("")}</div>
+    <div class="amt-in"><input class="num" id="pmAmt" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Montant" value="${preset?String(r2(preset)).replace(".",","):""}"><span>${curSym()}</span></div>
+    <div class="row" style="justify-content:center">${[10,20,50,100].map(a=>niceStep(inCur(a))).map(a=>`<button type="button" class="btn sm" data-q="${a}">${fm0(a)}</button>`).join("")}</div>
     <div><div class="eyebrow" style="margin-bottom:8px">Projet</div><div class="cats">${pots.map(p=>`<button type="button" data-psel="${p.id}" aria-pressed="${p.id===sel}"><span class="dot" style="background:${col(p.color)}"></span>${esc(p.name)}</button>`).join("")}</div></div>
     <label class="f">Note (facultatif)<input class="in" id="pmNote" maxlength="40" placeholder="${dir>0?"ex. Virement paie":"ex. Réparation voiture"}"></label>
     <div class="err" id="pmErr"></div>
@@ -1578,7 +1629,7 @@ function catchupSheet(amount,from){
   let months=amount>c.base*0.3?2:1;
   openModal(`<h2>${manual?"Ajouter un montant à rattraper":"Rattraper "+monthName(from)}</h2>
     ${manual?`<p class="small muted">Un dépassement, un découvert ou une dépense imprévue à récupérer sur tes prochains budgets.</p>
-      <div class="amt-in"><input class="num" id="cuAmt" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Montant"><span>€</span></div>`
+      <div class="amt-in"><input class="num" id="cuAmt" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Montant"><span>${curSym()}</span></div>`
       :`<p class="muted">Dépassement : <b class="num" style="color:var(--ink)">${fm0(amount)}</b>. Sur combien de mois veux-tu le récupérer ?</p>`}
     <div class="seg" role="group" aria-label="Durée">${[1,2,3].map(n=>`<button type="button" data-months="${n}">${n} mois</button>`).join("")}</div>
     <div id="cuHint"></div>
@@ -1699,7 +1750,7 @@ document.addEventListener("click",e=>{
   if(t.dataset.shareTr){shareSheet(t.dataset.shareTr);return;}
   if(t.dataset.sim){closeModal(); simulate(t.dataset.sim); if(tab==="transfert") rx.tab="track"; render(); toast("Paiement simulé : suis l'avancement ici"); return;}
   if(t.dataset.cancelTr){const id=t.dataset.cancelTr; closeModal(); confirmBox("Annuler cette demande ?","Le lien envoyé ne fonctionnera plus.","Annuler la demande",()=>{advance(id,"cancelled"); toast("Demande annulée");}); return;}
-  if(t.dataset.trSave){const tr=S.transfers[t.dataset.trSave]; closeModal(); if(tr) potMoveSheet(null,1,tr.amountEur); return;}
+  if(t.dataset.trSave){const tr=S.transfers[t.dataset.trSave]; closeModal(); if(tr) potMoveSheet(null,1,trAmt(tr)); return;}
   if(t.dataset.copy){copyText(t.dataset.copy);return;}
   if(t.dataset.editTx){const x=S.tx[t.dataset.editTx]; if(x) expenseSheet(x); return;}
   if(t.dataset.filter){txFilter=t.dataset.filter;render();return;}
@@ -1772,6 +1823,7 @@ document.addEventListener("keydown",e=>{
   }
 });
 document.addEventListener("input",e=>{const el=e.target;
+  if(el.id==="obCountry"){ob.country=el.value; render(); const s=$("#obCountry"); if(s) s.focus(); return;}
   if(el.id==="obSave") ob.save=el.value; if(el.id==="obIncome") ob.income=el.value; if(el.id==="obFixed") ob.fixed=el.value; if(el.id==="obName") ob.name=el.value;
   if(el.id==="cwHolder"){const b=$(".ccard.preview .cc-holder"); if(b) b.textContent=el.value.trim().toUpperCase()||"—";}
   if(el.id==="cwLim"){const v=$("#cwLimV"); if(v) v.textContent=fm0(+el.value);}
@@ -1779,6 +1831,11 @@ document.addEventListener("input",e=>{const el=e.target;
 });
 document.addEventListener("change",e=>{
   const el=e.target; if(!S.profile) return;
+  if(el.dataset.pfCountry){const c=el.value, r=RES[c], old=S.profile.currency||"EUR"; if(!r) return;
+    const apply=()=>{editProfile(np=>{np.country=c; np.currency=r.cur;}); render(); toast(`Pays de résidence : ${r.name}`);};
+    if(r.cur===old){apply(); return;}
+    dirty=true;   // si l'utilisateur annule, l'écran revient à l'ancien pays
+    confirmBox(`Passer à ${CUR_NAME[r.cur]||r.cur} ?`,`Tes montants s'afficheront en ${r.cur} au lieu de ${old}. Ceux déjà enregistrés (revenus, budgets, dépenses, épargne) ne sont pas convertis : vérifie-les ensuite.`,"Changer",apply); return;}
   if(el.dataset.pfText){const v=el.value.trim(); editProfile(np=>np[el.dataset.pfText]=v); if(el.dataset.pfText==="name"&&mode!=="cloud") Auth.updateName(v).catch(()=>{}); dirty=true; return;}
   if(el.dataset.pf){const v=parseAmt(el.value||"0"); editProfile(np=>np[el.dataset.pf]=v>0?v:0); dirty=true; return;}
   if(el.dataset.catName){const v=el.value.trim(); if(v) editProfile(np=>{const k=np.categories.find(x=>x.id===el.dataset.catName); if(k) k.name=v;}); return;}

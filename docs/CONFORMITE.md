@@ -219,6 +219,65 @@ Dans l'Union européenne, la commission d'interchange perçue sur chaque paiemen
 
 ---
 
+## 10. Pays de résidence et monnaies
+
+L'appli affiche tous les montants dans la monnaie du pays de résidence choisi par l'utilisateur. Elle couvre 32 pays :
+- la zone euro, soit 21 pays, dont la Bulgarie depuis le 1er janvier 2026 ;
+- le Danemark, la Hongrie, la Pologne, la Roumanie, la Suède et la Tchéquie ;
+- l'Islande, le Liechtenstein et la Norvège ;
+- le Royaume-Uni et la Suisse.
+
+| Point | Ce qu'il faut savoir | Dans l'appli |
+| --- | --- | --- |
+| Conversion F CFA → euro | Parité fixe : 1 € = 655,957 F CFA | Appliquée |
+| Conversion euro → autre monnaie | Taux de référence de la BCE du jour | Taux enregistré dans `data/taux.json`, mis à jour chaque jour ouvré par la mise en ligne |
+| Transparence des frais de conversion | Le règlement (UE) 2019/518, qui modifie le règlement 924/2009, impose d'exprimer les frais de conversion comme une **marge en pourcentage par rapport au taux de référence de la BCE**, communiquée avant l'opération | La démo affiche « taux BCE, sans marge ». En réel, afficher la marge exacte du partenaire. |
+| Seuils légaux en euros | Sans contact (50 € et 150 €), règlement sur les transferts de fonds (1 000 €) | Comparaison faite en euros ; montants affichés convertis |
+| Royaume-Uni et Suisse | Hors de l'Espace économique européen : l'agrément européen (« passeport ») ne s'y applique pas | **À prévoir :** un partenaire agréé localement (FCA au Royaume-Uni, FINMA en Suisse) et les règles locales, sans contact compris |
+| Changement de pays | Les montants déjà saisis ne sont pas convertis | L'appli prévient avant de changer |
+
+---
+
+## 11. Pilote Burkina Faso : analyse de la proposition reçue
+
+Une proposition de montage pour un premier test au Burkina Faso a été étudiée en octobre 2026. Ce qu'il faut en retenir :
+
+**1. Moyens de paiement : à garder.** Orange Money, Moov Money et Wave sont bien présents. Wave est installé au Burkina depuis 2021. Telecel Money et Sank Money sont aussi utilisés. Les cinq sont proposés dans l'appli pour le Burkina.
+
+**2. Agrégateurs : à vérifier un par un.**
+- **Existent bien :** LigdiCash, YengaPay, Kkiapay et CinetPay. La page de paiement de YengaPay liste Orange, Moov, Telecel et Sank, mais pas Wave.
+- **Introuvables, à ne pas retenir :** « LigdyPay » (probablement une confusion avec LigdiCash), « Kaybic Africa » et « E-Pay Burkina ».
+- **Agrément BCEAO :** pour chacun, le vérifier sur la [liste officielle de la Commission bancaire de l'UMOA](https://www.cb-umoa.org/sites/default/files/_Liste%20EME%20ET%20EP%20Burkina_2026.pdf). D'après l'extrait consulté au 29 juin 2026, sont agréés au Burkina : InTouch Burkina et Kerry Payments Burkina (établissements de paiement), et Orange Money Burkina (établissement de monnaie électronique). **À vérifier.**
+- **Usage du compte :** un compte marchand d'agrégateur sert à vendre des biens ou des services. L'utiliser pour encaisser des transferts d'argent doit être déclaré et accepté par l'agrégateur.
+
+**3. Décret « étudiants » : réel, mais mal interprété.**
+- Le décret existe. Adopté en Conseil des ministres le 25 juin 2026, il oblige tout étudiant burkinabè à obtenir une autorisation du ministère de l'Enseignement supérieur avant d'étudier à l'étranger, sous peine de non-reconnaissance du diplôme.
+- En revanche, rien n'en fait un justificatif de change « imparable ». Les pièces citées pour l'aide aux étudiants dans l'UEMOA sont :
+  - le titre de séjour ou le certificat de résidence ;
+  - les pièces justifiant les dépenses (scolarité, loyer) ;
+  - le formulaire de change.
+- **Dans l'appli :** quand le motif est « frais d'études », l'appli liste les pièces à préparer. Pour le Burkina, elle mentionne aussi l'autorisation ministérielle.
+- **Pas de téléversement obligatoire, pour deux raisons :**
+  - cela ne concerne que les étudiants burkinabè ;
+  - ces documents doivent être collectés par la banque ou le partenaire agréé, pas stockés par CauriPay (minimisation des données, RGPD).
+
+**4. Montage « compte de transit » : bloquant en l'état.** Le schéma proposé est le suivant :
+1. l'argent arrive en F CFA sur un compte marchand de CauriPay au Burkina ;
+2. le serveur de CauriPay crédite aussitôt l'étudiant en euros, chez Swan ou Treezor.
+
+Il pose trois problèmes :
+- **CauriPay ferait elle-même de la transmission de fonds**, dans les deux zones et sans agrément. C'est le point interdit identifié en section 1.
+- **Le schéma ne dit pas comment les F CFA sortent du Burkina.** Une sortie de devises de l'UEMOA passe par une banque agréée, avec justificatifs. Créditer l'étudiant en euros avec d'autres fonds pendant que les F CFA restent au Burkina s'apparente à une **compensation**, que la réglementation des changes encadre strictement. **À vérifier avec un avocat local.**
+- **Alimenter les comptes des clients avec les fonds de CauriPay** est aussi une activité de paiement réglementée.
+
+Deux montages conformes possibles :
+- **Le montage cible :** un **partenaire agréé qui opère le couloir UEMOA → Europe**. Il encaisse au Burkina (directement ou via un agrégateur agréé), fait sortir les devises par sa banque correspondante, puis crédite le compte du client en Europe. CauriPay reste l'interface, et éventuellement l'agent.
+- **Le plus simple pour un test :** la famille fait un **virement international** depuis sa banque au Burkina, avec les justificatifs, vers l'IBAN de l'étudiant. CauriPay prépare la demande, liste les pièces à fournir et suit l'arrivée.
+
+**5. Envoi du lien par WhatsApp (Twilio) : possible.** Il faut un compte WhatsApp Business, des modèles de messages validés par WhatsApp, l'accord des destinataires et un contrat de sous-traitance RGPD.
+
+---
+
 ## Sources consultées (octobre 2026)
 
 - PSD3 et RSP, calendrier : [Clifford Chance, avril 2026](https://www.cliffordchance.com/content/dam/cliffordchance/briefings/2026/04/impact-of-psd3-are-you-ready.pdf) · [Adyen](https://www.adyen.com/en_AE/knowledge-hub/psd3) · [fintech.global, août 2026](https://fintech.global/2026/08/14/psd3-is-coming-is-your-payments-licence-ready-for-2028/)
@@ -231,4 +290,6 @@ Dans l'Union européenne, la commission d'interchange perçue sur chaque paiemen
 - Mots de passe : [Clubic, recommandation CNIL 2022](https://www.clubic.com/pro/it-business/securite-et-donnees/actualite-442581-mots-de-passe-la-cnil-fait-ses-recommandations-etes-vous-dans-les-clous.html) · [Solutions numériques](https://www.solutions-numeriques.com/juridique-mots-de-passe-quelles-recommandations-de-la-cnil)
 - Établissement de paiement, capital : [Crassula, guide 2026](https://crassula.io/fr/guides/comment-creer-une-entreprise-de-transfert-dargent/) · [ACPR, sécurité des paiements](https://acpr.banque-france.fr/system/files/import/acpr/medias/documents/jch_20180403_conference_securite_des_paiements.pdf)
 - Cartes et sans contact : [Apple, transactions NFC HCE dans l'EEE](https://developer.apple.com/support/hce-transactions-in-apps) · [Commission européenne, engagements d'Apple sur le NFC (2024)](https://ec.europa.eu/commission/presscorner/api/files/document/print/fin/ip_24_3706/IP_24_3706_EN.pdf) · [Selectra, plafonds du sans contact](https://selectra.info/finance/actualites/marche/sans-contact-refuse-paiement-telephone-passe) · [Reap, affichage sécurisé des cartes](https://docs.reap.global/cards/secure-display) · [Lithic, affichage du numéro et du cryptogramme](https://docs.lithic.com/docs/quick-start-card-ui)
+- Monnaies : [Taux de référence de la BCE](https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml) · [Règlement 2021/1230 (frais de conversion, EUR-Lex)](https://eur-lex.europa.eu/eli/reg/2021/1230/oj/fra) · [Banque de France, Bulgarie dans la zone euro](https://www.banque-france.fr/fr/communiques-de-presse/la-bulgarie-adherera-la-zone-euro-le-1er-janvier-2026)
+- Burkina Faso : [allAfrica, décret sur les études à l'étranger](https://fr.allafrica.com/stories/202606260536.html) · [Capmad](https://www.capmad.com/article/burkina-faso-un-decret-impose-une-autorisation-ministerielle-pour-tout-projet-detudes-a-letranger) · [Burkina24, Wave et Orabank](https://burkina24.com/2026/07/15/burkina-faso-largent-circule-desormais-plus-facilement-entre-wave-et-orabank/) · [YengaPay](https://yengapay.com/) · [Kkiapay](https://kkiapay.me/?lang=en) · [We Are Tech, LigdiCash](https://www.wearetech.africa/fr/fils/solutions/burkina-faso-ligdicash-facilite-les-paiements-en-ligne) · [Liste EME et EP Burkina 2026](https://www.cb-umoa.org/sites/default/files/_Liste%20EME%20ET%20EP%20Burkina_2026.pdf)
 - Accessibilité : [DGCCRF](https://www.economie.gouv.fr/node/3235045) · [Qualibooth, décret 2023-931](https://www.qualibooth.com/accessibility/compliance/europe/france---decree-number-2023-931)

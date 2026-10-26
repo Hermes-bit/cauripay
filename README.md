@@ -8,6 +8,7 @@ Appli de budget personnel pensée pour arrêter de finir le mois dans le rouge, 
 - **Rattrapage** : si un mois dépasse, tu étales le dépassement sur 1 à 3 mois et tes budgets baissent automatiquement
 - **Règle des 48 h** contre les achats impulsifs
 - **Cartes CauriPay** (démonstration) : carte virtuelle ou à usage unique au motif de cauris, 4 styles, paiement en ligne validé (3-D Secure), sans contact simulé, gel, plafonds, opposition. Chaque paiement s'ajoute au budget
+- **Ta monnaie** : au premier lancement, tu choisis ton pays de résidence parmi 32 pays (zone euro, reste de l'UE, Islande, Liechtenstein, Norvège, Royaume-Uni, Suisse). Tout s'affiche alors dans ta monnaie : euro, livre, franc suisse, couronnes, zloty, forint, leu
 - **Effets** : écrans qui glissent, montants qui défilent, vibrations sur Android, pluie de cauris pour les réussites. L'option « réduire les animations » du téléphone est respectée
 - **Recevoir d'Afrique** (démonstration) : tu crées une demande en euros, ton proche paie en F CFA par mobile money (Wave, Orange Money, MTN…) et tu suis l'arrivée de l'argent
 - **Tes données** : export en fichier `.json` et suppression du compte
@@ -101,6 +102,15 @@ Bouton **Recevoir** sur l'accueil, ou bouton central de la barre du bas.
 Les pays ouverts sont ceux dont la monnaie a un **taux fixe avec l'euro** : zone franc CFA (UEMOA et CEMAC), Comores, Cap-Vert. Les autres sont affichés « bientôt ».
 
 Pour passer au réel, la simulation est à remplacer par l'API d'un partenaire agréé : fonctions `simulate()` et `vPayer()` dans `js/app.js`. Le détail est dans [docs/CONFORMITE.md](docs/CONFORMITE.md).
+
+---
+
+## Monnaies et taux de change
+
+- Le pays de résidence se choisit au premier lancement, puis dans **Profil → Mon mois type**. Changer de pays ne convertit pas les montants déjà saisis : l'appli prévient avant.
+- Le franc CFA est lié à l'euro par un taux fixe (1 € = 655,957 F CFA). Pour les autres monnaies, l'appli utilise le **taux de référence de la Banque centrale européenne**, enregistré dans `data/taux.json`.
+- Ce fichier est mis à jour automatiquement par la mise en ligne : à chaque `push`, et chaque jour ouvré à 15 h 30 (UTC). Le site le sert lui-même, donc le téléphone n'appelle aucun service tiers.
+- Les plafonds et les seuils légaux (sans contact, demandes) sont fixés en euros dans `js/config.js` et convertis à l'affichage.
 
 ---
 
