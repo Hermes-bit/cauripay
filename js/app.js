@@ -31,6 +31,36 @@ const maskPhone=p=>{const d=String(p||"").replace(/\D/g,"");return d?"•••�
 const money=v=>{const s=fm(v), m=s.match(/^(.*?)(,\d{2}\s€)$/); return m?`${m[1]}<small>${m[2]}</small>`:s;};
 const b64e=s=>btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 const b64d=s=>new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/")),c=>c.charCodeAt(0)));
+
+/* ============ effets ============ */
+const calm=()=>!!(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches);
+// vibrations : Android seulement, l'iPhone ne les autorise pas depuis une page web
+const HAP={tap:8,hold:25,ok:[14,50,22],err:[40,40,40]};
+const haptic=p=>{try{if(navigator.vibrate) navigator.vibrate(p);}catch(e){}};
+// pluie de cauris pour les réussites
+function burst(from){
+  if(calm()) return;
+  const r=from&&from.getBoundingClientRect?from.getBoundingClientRect():{left:innerWidth/2-20,top:innerHeight/2-20,width:40,height:40};
+  const cx=r.left+r.width/2, cy=r.top+r.height/2, layer=document.createElement("div"); layer.className="burst"; layer.setAttribute("aria-hidden","true");
+  for(let i=0;i<22;i++){const b=document.createElement("i"), a=Math.random()*Math.PI*2, d=60+Math.random()*130;
+    b.style.cssText=`left:${cx}px;top:${cy}px;--dx:${(Math.cos(a)*d).toFixed(0)}px;--dy:${(Math.sin(a)*d-70).toFixed(0)}px;--r:${(Math.random()*540-270).toFixed(0)}deg;--d:${(.75+Math.random()*.5).toFixed(2)}s`;
+    if(i%3===0) b.className="sand"; layer.appendChild(b);}
+  document.body.appendChild(layer); setTimeout(()=>layer.remove(),1500);
+}
+// gros montants qui défilent jusqu'à leur valeur
+const counts={};
+const cnt=(key,v,fmt)=>`<span data-count="${v}" data-key="${key}"${fmt?` data-fmt="${fmt}"`:""}>${fmt==="eur0"?fm0(v):money(v)}</span>`;
+function runCounters(entered){
+  document.querySelectorAll("[data-count]").forEach(el=>{
+    const key=el.dataset.key, to=+el.dataset.count, from=entered?0:(key in counts?counts[key]:to); counts[key]=to;
+    if(calm()||from===to) return;
+    const t0=performance.now(), dur=entered?800:450, f=el.dataset.fmt==="eur0"?fm0:money;
+    el.innerHTML=f(from);
+    const step=now=>{const p=Math.min(1,(now-t0)/dur), e=1-Math.pow(1-p,3); el.innerHTML=f(from+(to-from)*e); if(p<1&&document.contains(el)) requestAnimationFrame(step);};
+    requestAnimationFrame(step);
+  });
+}
+const replay=(el,cls)=>{if(!el||calm()) return; el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);};
 // catch-up plans: profile.catchups = [{id,from,amount,months,start,kind:"plan"|"skip"|"surplus"}]
 function deductionFor(mk,P){return (P.catchups||[]).filter(x=>x.kind==="plan"&&x.amount>0&&mk>=x.start&&mk<monthAdd(x.start,x.months)).reduce((s,x)=>s+x.amount/x.months,0);}
 // anciennes couleurs (thème clair) → couleurs lisibles sur fond sombre
@@ -75,8 +105,10 @@ const feeFor=e=>e>0?r2(Math.max(CFG.transferFeeMin||0,e*(CFG.transferFeePct||0))
 /* ============ state ============ */
 // S.profile: {v:2,name,income,fixed,save,categories:[{id,name,budget,color}],catchups,kyc,createdAt}
 // S.tx / S.pots / S.wishes / S.transfers / S.contacts : maps id -> doc
-const KINDS=["tx","pots","wishes","transfers","contacts"];
-const emptyState=()=>({profile:null,tx:{},pots:{},wishes:{},transfers:{},contacts:{},savedAt:0});
+const KINDS=["tx","pots","wishes","transfers","contacts","cards","wallet"];
+const emptyState=()=>({profile:null,tx:{},pots:{},wishes:{},transfers:{},contacts:{},cards:{},wallet:{},savedAt:0});
+// compte CauriPay (démo) : mouvements dans S.wallet (argent reçu d'Afrique, recharges, paiements par carte)
+const walletBal=()=>r2(Object.values(S.wallet).reduce((a,m)=>a+(+m.amt||0),0));
 let S=emptyState();
 let phase="loading";           // loading | auth | verify | reset | onboarding | app | payer
 let mode="pending";            // pending | cloud (compte Claude) | supabase | local
@@ -85,7 +117,7 @@ let tab="accueil", navStack=[], txFilter="all", histLimit=3, weekOpen=false;
 let authView="login", authErr="", authMsg="", pendingEmail="", authBusy=false;
 let rx={tab:"new",contact:null,country:"SN",str:"",cur:"EUR"};
 let pendingWrites=0, dirty=false, R=null, lastSync=0;
-try{let t=localStorage.getItem("cauripay_tab"); t={depenses:"budget",tresorerie:"epargne"}[t]||t; if(["accueil","budget","epargne","envies"].includes(t)) tab=t;}catch(e){}
+try{let t=localStorage.getItem("cauripay_tab"); t={depenses:"budget",tresorerie:"epargne"}[t]||t; if(["accueil","budget","epargne","envies","cartes"].includes(t)) tab=t;}catch(e){}
 const displayName=()=>(S.profile&&S.profile.name)||(user&&user.name)||"";
 
 const cacheKey=()=>"cauripay_v3_"+(user?user.id:"anon");
@@ -273,8 +305,9 @@ function calc(){
   // réceptions depuis l'Afrique
   const transfers=Object.values(S.transfers).map(trView);
   const trMonth=transfers.filter(t=>t.status!=="cancelled"&&t.status!=="expired"&&iso(new Date(t.createdAt)).slice(0,7)===mk).reduce((a,t)=>a+(+t.amountEur||0),0);
+  const wal=walletBal();
   return {P,now,td,mk,day,dim,mtx,spent,avail,base,catchup,prevMk,prevSpent,prevAvail,prevDiff,prevPending,activeCatchups,remaining,ws,we,weekBudget,spentWeek,leftWeek,todayBudget,leftToday,spentToday,dailyTarget,daysLeftWeek,daysInWeek,week,
-    wants,byCat,projection,streak,skipped,wishes,pots:potInfo,totalSaved,savedThisMonth,needMonthly,weeklyNormal:avail*12/52,transfers,trMonth};
+    wants,byCat,projection,streak,skipped,wishes,pots:potInfo,totalSaved,savedThisMonth,needMonthly,weeklyNormal:avail*12/52,transfers,trMonth,walletBal:wal};
 }
 const catOf=id=>(S.profile?.categories||[]).find(c=>c.id===id)||{name:"Autre",color:"#A3B096"};
 
@@ -317,7 +350,15 @@ const I={
   doc:sv('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>'),
   del:sv('<path d="M9 6h11v12H9l-6-6z"/><path d="M12 10l4 4M16 10l-4 4"/>'),
   edit:sv('<path d="M4 20h4L19 9l-4-4L4 16z"/>'),
-  undo:sv('<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>')
+  undo:sv('<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>'),
+  card:sv('<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M7 15h4"/>'),
+  nfc:sv('<path d="M6 8.5a5 5 0 0 1 0 7M9.5 6a8.5 8.5 0 0 1 0 12M13 3.5a12 12 0 0 1 0 17M16.5 1.5a15 15 0 0 1 0 21"/>'),
+  snow:sv('<path d="M12 2v20M3.3 7l17.4 10M20.7 7L3.3 17M9 3.5l3 2.5 3-2.5M9 20.5l3-2.5 3 2.5"/>'),
+  sliders:sv('<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>'),
+  phone:sv('<rect x="6.5" y="2" width="11" height="20" rx="2.5"/><path d="M11 18.5h2"/>'),
+  ban:sv('<circle cx="12" cy="12" r="9"/><path d="M5.7 5.7l12.6 12.6"/>'),
+  cart:sv('<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2.5 4h2.2l2.3 11a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L20.5 8H6"/>'),
+  lock:sv('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>')
 };
 const LOGO=`<img class="logo" src="icons/logo.svg" alt="CauriPay" width="56" height="56">`;
 
@@ -331,15 +372,21 @@ function render(){
   const sub=phase!=="app"||tab==="transfert"||tab==="profil";
   document.body.classList.toggle("no-nav",sub);
   nav.hidden=sub;
+  // un écran qui change s'anime à l'entrée ; un simple rafraîchissement ne rejoue pas l'animation
+  const key=phase==="app"?"app:"+tab:phase==="onboarding"?"ob:"+ob.step:phase+":"+authView;
+  const entered=key!==render.key; render.key=key;
   if(phase==="loading"){app.innerHTML=`<div class="loading"><i></i><div>Ouverture de tes comptes…</div></div>`;return;}
-  if(phase==="payer"){app.innerHTML=vPayer();return;}
-  if(phase==="auth"||phase==="verify"||phase==="reset"){app.innerHTML=vAuth();return;}
-  if(phase==="onboarding"){app.innerHTML=vOnboarding();return;}
-  const c=calc();
-  if(!sub) nav.innerHTML=navHtml();
-  const v={accueil:vHome,budget:vSpend,epargne:vTreso,envies:vWishes,transfert:vTransfer,profil:vProfile}[tab]||vHome;
-  app.innerHTML=`<section class="view view-${tab}">${v(c)}</section>`;
-  if(tab==="transfert"&&rx.tab==="new") rxUpdate();
+  if(phase==="app"){
+    const c=calc();
+    if(!sub) nav.innerHTML=navHtml(entered);
+    const v={accueil:vHome,budget:vSpend,epargne:vTreso,envies:vWishes,cartes:vCards,transfert:vTransfer,profil:vProfile}[tab]||vHome;
+    app.innerHTML=`<section class="view view-${tab}">${v(c)}</section>`;
+  }else app.innerHTML=phase==="payer"?vPayer():phase==="onboarding"?vOnboarding():vAuth();
+  const root=app.firstElementChild;
+  if(entered&&root&&!calm()){root.classList.add("enter"); [...root.children].forEach((ch,i)=>ch.style.setProperty("--i",Math.min(i,8)));}
+  runCounters(entered);
+  if(phase==="app"&&tab==="transfert"&&rx.tab==="new") rxUpdate();
+  if(phase==="app"&&tab==="cartes") cardsAfterRender();
 }
 function goTab(k,isBack){
   if($("#scrim")) closeModal();
@@ -347,11 +394,11 @@ function goTab(k,isBack){
   else{ navStack=[]; try{localStorage.setItem("cauripay_tab",k);}catch(_){} }
   tab=k; render(); window.scrollTo({top:0});
 }
-function navHtml(){
-  const it=(k,l,ic)=>`<button data-tab="${k}" ${tab===k?'aria-current="page"':""}>${ic}<span>${l}</span></button>`;
-  return `<div class="nav-in">${it("accueil","Accueil",I.home)}${it("budget","Budget",I.chart)}
+function navHtml(entered){
+  const it=(k,l,ic)=>`<button data-tab="${k}" ${tab===k?`aria-current="page"${entered?' class="just"':""}`:""}>${ic}<span>${l}</span></button>`;
+  return `<div class="nav-in">${it("accueil","Accueil",I.home)}${it("cartes","Cartes",I.card)}
     <button class="nav-main" data-act="actions" aria-label="Actions rapides" aria-haspopup="dialog">${I.scan}</button>
-    ${it("epargne","Épargne",I.vault)}${it("envies","Envies",I.clock)}</div>`;
+    ${it("budget","Budget",I.chart)}${it("epargne","Épargne",I.vault)}</div>`;
 }
 const avatarBtn=cls=>`<button class="avatar ${cls||""}" data-tab="profil" aria-label="Mon profil">${esc(initials(displayName()||(user&&user.email)))}</button>`;
 function bellBtn(c,cls){const n=notifs(c).length; return `<button class="sq-btn ${cls||""}" data-act="notifs" aria-label="Notifications${n?` : ${n}`:""}">${I.bell}${n?`<i class="badge">${n}</i>`:""}</button>`;}
@@ -475,7 +522,7 @@ async function obFinish(){
   phase="app"; tab="accueil";
   write("pots",potId,{id:potId,name:"Coussin de sécurité",target:Math.round((fix+avail)*3/50)*50||1000,deadline:"",balance:0,moves:[],color:PALETTE[0],createdAt:Date.now()});
   write("profile","profile",{v:2,name:ob.name||(user&&user.name)||"",income:inc,fixed:fix,save:sav,categories:cats,createdAt:Date.now()});
-  render(); toast("Ton budget est prêt");
+  render(); toast("Ton budget est prêt"); haptic(HAP.ok); setTimeout(()=>burst($(".bal")),250);
 }
 
 /* ---------- accueil ---------- */
@@ -494,6 +541,7 @@ function notifs(c){
   if(c.leftWeek<0) out.push({ic:I.alert,t:`Semaine dépassée de ${fm0(-c.leftWeek)}.`,a:'data-tab="budget"'});
   c.wishes.filter(w=>w.status==="wait"&&now-w.created>=H48).forEach(w=>out.push({ic:I.clock,t:`Les 48 h sont passées pour « ${esc(w.name)} » : à toi de décider.`,a:'data-tab="envies"'}));
   c.transfers.filter(t=>t.status==="credited"&&now-(t.statusAt||0)<3*864e5).forEach(t=>out.push({ic:I.down,t:`${fm(t.amountEur)} reçus de ${esc(first(t.senderName))}.`,a:`data-tr="${t.id}"`}));
+  Object.values(S.tx).filter(t=>t.card&&now-(t.createdAt||0)<864e5).forEach(t=>out.push({ic:I.card,t:`Paiement de ${fm(t.amount)} chez ${esc(t.note)} avec ta carte •• ${esc(t.last4||"")}.`,a:'data-tab="cartes"'}));
   c.transfers.filter(t=>t.status==="created").forEach(t=>out.push({ic:I.globe,t:`${esc(first(t.senderName))} n'a pas encore payé ta demande de ${fm(t.amountEur)}.`,a:`data-tr="${t.id}"`}));
   return out;
 }
@@ -514,9 +562,9 @@ function vHome(c){
     </header>
     <div class="bal">
       <div class="bal-top"><span>Reste cette semaine · ${range}</span><button class="dots" data-act="toggleweek" aria-label="Détail de la semaine">${I.dots}</button></div>
-      <div class="bal-amt num ${left<0?"neg":""}">${left<0?"−":""}${money(Math.abs(left))}</div>
+      <div class="bal-amt num ${left<0?"neg":""}">${left<0?"−":""}${cnt("home-left",r2(Math.abs(left)))}</div>
       <div class="bal-meta"><span class="pill-dk">${I.up}${fm0(Math.max(0,c.leftToday))} max aujourd'hui</span><span>sur ${fm0(c.weekBudget)} prévus</span></div>
-      <div class="acts">${act("expense",I.up,"Dépense")}${act("receive",I.down,"Recevoir")}${act("deposit",I.piggy,"Épargner")}${act("",I.bag,"Envie",'data-act="wish"')}</div>
+      <div class="acts">${act("expense",I.up,"Dépense")}${act("receive",I.down,"Recevoir")}${act("pay",I.nfc,"Payer")}${act("deposit",I.piggy,"Épargner")}</div>
     </div>
     <div class="week-more" id="weekMore" ${weekOpen?"":"hidden"}>
       <div class="wbar"><i class="${left<0?"over":""}" style="width:${left<0?100:wpct}%"></i></div>
@@ -532,6 +580,7 @@ function vHome(c){
     <button class="notch" data-act="toggleweek" aria-expanded="${weekOpen}" aria-controls="weekMore" aria-label="${weekOpen?"Masquer":"Afficher"} le détail de la semaine">${I.chevD}</button>
   </div>
   ${prevCard(c)}
+  ${c.walletBal>0||liveCards().length?`<button class="wal home" data-tab="cartes"><span class="wal-l"><small>Compte CauriPay${DEMO?" (démo)":""}</small><b class="num">${cnt("home-wal",c.walletBal)}</b></span><span class="pill">${I.card} Cartes ${I.chevR}</span></button>`:""}
   <section>
     ${secHead("Expéditeurs favoris",`<button class="pill" data-act="receive">Recevoir ${I.chevR}</button>`)}
     <div class="chips"><button class="add-chip" data-act="newcontact" aria-label="Ajouter un expéditeur">${I.plus}</button>
@@ -579,7 +628,7 @@ function txRow(t){
   const k=catOf(t.cat), kc=col(k.color);
   const tm=t.createdAt&&iso(new Date(t.createdAt))===t.date?timeOf(t.createdAt):dfmt(t.date,{day:"numeric",month:"short"});
   return `<button class="tx" data-edit-tx="${t.id}"><span class="ic" style="color:${kc}">${I.up}</span>
-    <span class="t"><b>${esc(t.note||k.name)}</b><span>${esc(k.name)}${t.kind==="envie"?' · <em class="want">Envie</em>':""}</span></span>
+    <span class="t"><b>${esc(t.note||k.name)}</b><span>${esc(k.name)}${t.card?` · Carte •• ${esc(t.last4||"")}`:""}${t.kind==="envie"?' · <em class="want">Envie</em>':""}</span></span>
     <span class="r"><span class="amt neg num">−${fm(t.amount)}</span><span class="tm">${tm}</span></span></button>`;
 }
 function trRow(t){
@@ -619,7 +668,7 @@ function vSpend(c){
   return `${pageHead("Budget",c)}
   <div class="sum-card">
     <div class="eyebrow">${monthName(c.mk,{month:"long",year:"numeric"})} · jour ${c.day} sur ${c.dim}</div>
-    <div class="sum-amt num ${c.remaining<0?"neg":""}">${c.remaining<0?"−":""}${money(Math.abs(c.remaining))}</div>
+    <div class="sum-amt num ${c.remaining<0?"neg":""}">${c.remaining<0?"−":""}${cnt("bud-rem",r2(Math.abs(c.remaining)))}</div>
     <div class="small" style="font-weight:600">reste sur ${fm0(c.avail)} prévus ce mois-ci</div>
     <div class="bar dk"><i style="width:${c.remaining<0?100:mp}%"></i></div>
     <div class="stats3">
@@ -650,6 +699,7 @@ function vSpend(c){
     <div class="row small" style="margin-top:10px;gap:16px"><span><span class="dot" style="background:var(--lime);margin-right:6px"></span>Besoins ${fm0(c.spent-c.wants)}</span><span><span class="dot" style="background:var(--want);margin-right:6px"></span>Envies ${fm0(c.wants)}</span></div>
     <p class="small muted" style="margin-top:8px">Garde les envies sous 30 % de tes dépenses du mois.</p>
   </div>
+  <button class="card linkcard" data-tab="envies"><span class="sq">${I.clock}</span><span><b>Règle des 48 heures</b><small>${c.wishes.filter(w=>w.status==="wait").length} en attente · ${fm0(c.skipped)} économisés</small></span>${I.chevR}</button>
   <div class="row" style="justify-content:space-between;margin-top:4px"><h2 class="sec-title">Historique</h2>
     <div class="filters">${[["all","Tout"],["besoin","Besoins"],["envie","Envies"]].map(([k,l])=>`<button data-filter="${k}" aria-pressed="${txFilter===k}">${l}</button>`).join("")}</div></div>
   ${shown.length?shown.map(m=>{
@@ -671,7 +721,7 @@ function vTreso(c){
   <div class="vstack">
     <div class="vcard">
       <div class="vc-top"><div><div class="vc-name">Ma trésorerie</div><div class="vc-sub">${c.pots.length} projet${c.pots.length>1?"s":""} d'épargne</div></div><span class="vc-brand">CAURIPAY</span></div>
-      <div class="vc-amt num">${money(c.totalSaved)}</div>
+      <div class="vc-amt num">${cnt("treso",c.totalSaved)}</div>
       <div class="vc-foot"><div><small>Versé ce mois-ci</small><b class="num">${fm0(c.savedThisMonth)} / ${fm0(save)}</b></div><div style="text-align:right"><small>Objectif du mois</small><b class="num">${Math.round(pctMonth)} %</b></div></div>
       <div class="vc-bar"><i style="width:${pctMonth}%"></i></div>
       <span class="vc-wm" aria-hidden="true">cauripay</span>
@@ -768,7 +818,7 @@ function rxKey(k){
     else if(a.length>=(dec?5:9)) return;
     s=(s==="0"?"":s)+k;
   }
-  rx.str=s; rxUpdate();
+  rx.str=s; rxUpdate(); replay($("#rxAmt"),"bump"); haptic(HAP.tap);
 }
 function vTransfer(c){
   const trs=c.transfers.slice().sort((a,b)=>b.createdAt-a.createdAt);
@@ -868,7 +918,7 @@ function shareText(t,link){
 function shareSheet(id){
   const t=S.transfers[id]; if(!t) return;
   const link=payerLink(t), msg=shareText(t,link), phone=(country(t.country).dial+t.senderPhone).replace(/\D/g,"");
-  openModal(`<span class="big-ico" style="align-self:center">${I.check}</span><h2 style="text-align:center">Demande créée</h2>
+  openModal(`<span class="big-ico ok-draw" style="align-self:center">${I.check}</span><h2 style="text-align:center">Demande créée</h2>
     <div class="ref num">${esc(t.ref)}</div>
     <p class="muted" style="text-align:center">Envoie ce lien à ${esc(first(t.senderName))} : le paiement de <b>${fmLocal(t.localAmount,t.currency)}</b> se fait avec ${esc(METHODS[t.method])}.</p>
     <div class="share">
@@ -877,12 +927,12 @@ function shareSheet(id){
       <button class="btn" data-copy="${esc(link)}">${I.copy}Copier</button>
     </div>
     ${t.demo&&t.status==="created"?`<button class="btn ghost block" data-sim="${t.id}">Simuler le paiement de ${esc(first(t.senderName))}</button>`:""}
-    <button class="btn ghost block" data-close>Fermer</button>`);
+    <button class="btn ghost block" data-close>Fermer</button>`,()=>{haptic(HAP.ok); setTimeout(()=>burst($(".ref")),120);});
 }
 function transferSheet(id){
   const raw=S.transfers[id]; if(!raw) return;
   const t=trView(raw), hist={}; (t.history||[]).forEach(h=>hist[h.s]=h.t);
-  const steps=[["created","Demande créée"],["paid","Payée par l'expéditeur"],["checking","Vérifications légales"],["credited","Argent reçu sur ton compte"]];
+  const steps=[["created","Demande créée"],["paid","Payée par l'expéditeur"],["checking","Vérifications légales"],["credited","Argent reçu sur ton compte CauriPay"]];
   const dead=t.status==="cancelled"||t.status==="expired", idx=steps.findIndex(s=>s[0]===t.status);
   openModal(`<div class="row" style="justify-content:space-between"><h2>${t.status==="credited"?"Argent reçu":"Demande"} · <span class="num">${fm(t.amountEur)}</span></h2><span class="chip ${STATUS[t.status][1]}">${STATUS[t.status][0]}</span></div>
     ${dead?`<div class="alert w">${I.alert}<span>${t.status==="expired"?"Cette demande a expiré sans être payée.":"Cette demande a été annulée."}</span></div>`
@@ -904,11 +954,13 @@ function transferSheet(id){
 function advance(id,s){
   const t=S.transfers[id]; if(!t||t.status==="cancelled"||t.status==="credited") return;
   const now=Date.now(); write("transfers",id,{...t,status:s,statusAt:now,history:[...(t.history||[]),{s,t:now}]});
-  if(s==="credited") toast(`${fm(t.amountEur)} reçus de ${first(t.senderName)}`);
+  if(s==="credited"){creditWallet(t); toast(`${fm(t.amountEur)} reçus de ${first(t.senderName)}`); haptic(HAP.ok); if(phase==="app") burst();}
   requestRender();
 }
+// l'argent reçu arrive sur le compte CauriPay (une seule fois par transfert)
+function creditWallet(t){const wid="tr"+t.id; if(!S.wallet[wid]) write("wallet",wid,{id:wid,amt:t.amountEur,kind:"transfer",note:"Reçu de "+t.senderName,at:Date.now()});}
 function simulate(id){advance(id,"paid"); setTimeout(()=>advance(id,"checking"),1600); setTimeout(()=>advance(id,"credited"),3800);}
-function tickDemo(){Object.values(S.transfers).forEach(t=>{if(t.demo&&(t.status==="paid"||t.status==="checking")&&Date.now()-(t.statusAt||0)>5000) advance(t.id,"credited");});}
+function tickDemo(){Object.values(S.transfers).forEach(t=>{if(t.status==="credited") creditWallet(t);}); Object.values(S.transfers).forEach(t=>{if(t.demo&&(t.status==="paid"||t.status==="checking")&&Date.now()-(t.statusAt||0)>5000) advance(t.id,"credited");});}
 function contactSheet(id){
   const x=id?S.contacts[id]:null; let cc=x?x.country:rx.country, m=x?x.method:null;
   const opts=ZONES.map(([z,l])=>`<optgroup label="${esc(l)}">${COUNTRIES.filter(k=>z==="other"?k.cur!=="XOF"&&k.cur!=="XAF":k.cur===z).map(k=>`<option value="${k.code}" ${k.code===cc?"selected":""}>${esc(k.name)}</option>`).join("")}</optgroup>`).join("")
@@ -1030,23 +1082,379 @@ function vPayer(){
     ${legalLinks()}</div>`;
 }
 
+/* ============ cartes CauriPay ============ */
+// Démonstration. En réel, la carte est émise par un établissement agréé, membre d'un réseau de cartes,
+// et le numéro complet et le cryptogramme restent chez l'émetteur (norme PCI DSS) : CauriPay ne doit jamais les stocker.
+const DESIGNS=[["citron","Citron"],["nuit","Nuit"],["sable","Sable"],["indigo","Indigo"]];
+const CARD_TYPES={
+  virtual:{label:"Carte virtuelle",short:"Virtuelle",desc:"Achats en ligne, et sans contact avec ton téléphone"},
+  single:{label:"Carte à usage unique",short:"Usage unique",desc:"Un seul achat en ligne, puis le numéro change"}};
+const MAX_CARDS=5;
+// sans contact : authentification forte au-delà de 50 € par paiement, de 150 € cumulés ou de 5 paiements d'affilée
+// (règlement délégué (UE) 2018/389, article 11)
+const NFC_ONE=50, NFC_SUM=150, NFC_COUNT=5;
+const MERCHANTS_NFC=["Supérette du Coin","Boulangerie du Marché","Pharmacie Centrale","Café des Amis","Primeur du Quartier","Kiosque Presse"];
+const MERCHANTS_WEB=["Boutique en ligne","Librairie en ligne","Billetterie Concerts","Mode & Wax"];
+const COWRIE=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><ellipse cx="12" cy="12" rx="7" ry="10"/><path d="M12 4.5c-1 2.5-1 12.5 0 15M10 8H8.6M10 11H8.3M10 14H8.3M10 17H8.7M14 8h1.4M14 11h1.7M14 14h1.7M14 17h1.3"/></svg>`;
+let cardSel=null, cw=null, fxCard=null;
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const digits=n=>{const b=new Uint8Array(n); crypto.getRandomValues(b); return [...b].map(x=>x%10).join("");};
+// numéro de démonstration : le préfixe 0000 n'appartient à aucun réseau de cartes, il ne fonctionne nulle part
+function newNumbers(){const d=new Date(); return {pan:"0000"+digits(12),cvv:digits(3),exp:pad(d.getMonth()+1)+"/"+String(d.getFullYear()+4).slice(2)};}
+const fmtPan=p=>String(p).replace(/(\d{4})(?=\d)/g,"$1 ");
+const liveCards=()=>Object.values(S.cards).filter(k=>k.status!=="closed").sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+const activeCard=()=>{const k=S.cards[cardSel]; return k&&k.status==="active"?k:liveCards().find(x=>x.status==="active")||null;};
+const kycOk=()=>!!(S.profile&&S.profile.kyc&&S.profile.kyc.status==="verified");
+function cardSpent(id){const mk=todayIso().slice(0,7); return sum(Object.values(S.tx).filter(t=>t.card===id&&t.date&&t.date.slice(0,7)===mk));}
+const sw=(id,title,sub,on,dis)=>`<label class="sw"><span><b>${title}</b><small>${sub}</small></span><input type="checkbox" role="switch" id="${id}" ${on?"checked":""} ${dis?"disabled":""}><i aria-hidden="true"></i></label>`;
+const pwBox=(id,ph)=>`<span class="pw"><input class="in" id="${id}" type="password" autocomplete="current-password" placeholder="${ph||""}" aria-label="Mot de passe"><button type="button" class="pw-eye" data-eye="${id}" aria-label="Afficher le mot de passe" aria-pressed="false">${I.eye}</button></span>`;
+
+function cardVisual(k,o){
+  o=o||{};
+  const num=o.reveal?fmtPan(k.pan):"•••• •••• •••• "+String(k.pan).slice(-4);
+  return `<div class="ccard d-${k.design} ${o.tilt===false?"":"tilt"} ${k.frozen?"frozen":""} ${o.cls||""}" data-card-id="${k.id||""}" ${o.label!==false?`role="img" aria-label="${esc(CARD_TYPES[k.type].label)} CauriPay se terminant par ${String(k.pan).slice(-4)}${k.frozen?", gelée":""}${k.status==="blocked"?", en opposition":""}"`:""}>
+    <span class="cc-pat"></span><span class="cc-wm">${COWRIE}</span><span class="cc-shine"></span>
+    <div class="cc-top"><span class="cc-brand">${COWRIE}CauriPay</span><span class="cc-type">${CARD_TYPES[k.type].short}</span></div>
+    <div class="cc-mid">${k.type==="single"?I.cart:I.nfc}</div>
+    <div class="cc-num num">${num}</div>
+    <div class="cc-bot"><div><small>Titulaire</small><b class="cc-holder">${esc(k.holder||"—")}</b></div><div><small>Expire</small><b class="num">${k.exp}</b></div><span class="cc-scheme">DÉMO</span></div>
+    ${k.frozen?`<div class="cc-frost">${I.snow}<b>Carte gelée</b></div>`:""}
+    ${k.status==="blocked"?`<div class="cc-frost blocked">${I.ban}<b>Opposition faite</b></div>`:""}
+  </div>`;
+}
+const cardBack=k=>`<div class="ccard back d-${k.design}" aria-hidden="true"><span class="cc-pat"></span><div class="cc-stripe"></div>
+  <div class="cc-cvv"><small>Cryptogramme</small><b class="num">${k.cvv}</b></div><p class="cc-legal">Carte de démonstration CauriPay, sans valeur.</p></div>`;
+
+function vCards(c){
+  const cards=liveCards(), head=pageHead("Cartes",c);
+  if(!cards.length){
+    const d=new Date(), sample={type:"virtual",design:"citron",pan:"0000000000002026",exp:pad(d.getMonth()+1)+"/"+String(d.getFullYear()+4).slice(2),holder:(displayName()||"CAURIPAY").toUpperCase()};
+    return head+`
+    <div class="card-empty">
+      <div class="ce-stack">${cardVisual(sample)}</div>
+      <h2>Ta carte CauriPay</h2>
+      <p class="muted">Une carte virtuelle pour payer en ligne, et sans contact avec ton téléphone. Elle se crée en une minute.</p>
+      <ul class="ticks"><li>Gratuite pendant la démonstration</li><li>Gelable et dégelable en un geste</li><li>Plafonds réglables et opposition immédiate</li><li>Chaque achat est ajouté à ton budget</li></ul>
+      ${DEMO?`<div class="demo-flag">${I.alert}<span><b>Démonstration.</b> Les cartes créées ici n'ont aucune valeur et ne fonctionnent chez aucun commerçant.</span></div>`:""}
+    </div>
+    <button class="lime-big" data-act="newcard">${I.plus} Créer ma carte CauriPay</button>`;
+  }
+  if(!cardSel||!S.cards[cardSel]||S.cards[cardSel].status==="closed") cardSel=cards[cards.length-1].id;
+  return head+`
+    <div class="cc-rail" id="cardRail" aria-label="Mes cartes">${cards.map(k=>`<div class="cc-slide">${cardVisual(k)}</div>`).join("")}</div>
+    ${cards.length>1?`<div class="cc-dots">${cards.map((k,i)=>`<button data-card-dot="${k.id}" aria-label="Carte ${i+1} : ${esc(k.name)}" ${k.id===cardSel?'aria-current="true"':""}></button>`).join("")}</div>`:""}
+    <div id="cardPanel" class="card-panel">${cardPanel(c,S.cards[cardSel])}</div>`;
+}
+function cardPanel(c,k){
+  const spent=cardSpent(k.id), lim=+k.limit||0, p=lim?Math.min(1,spent/lim):0, blocked=k.status==="blocked";
+  const flag=(on,l)=>`<span class="chip ${on?"ok":"need"}">${on?"✓":"✕"} ${l}</span>`;
+  const tile=(a,ic,l,dis)=>`<button class="tile" data-card-act="${a}" ${dis?"disabled":""}><span class="sq">${ic}</span>${l}</button>`;
+  const txs=Object.values(S.tx).filter(t=>t.card===k.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).slice(0,5);
+  return `
+  <div class="wal"><span class="wal-l"><small>Compte CauriPay${DEMO?" (démo)":""}</small><b class="num">${cnt("wallet",c.walletBal)}</b></span><button class="pill" data-card-act="topup">${I.plus} Recharger</button></div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div style="min-width:0"><b>${esc(k.name)}</b><div class="small muted">${CARD_TYPES[k.type].desc}</div></div>
+      <span class="chip ${blocked?"d":k.frozen?"w":"ok"}">${blocked?"Opposition":k.frozen?"Gelée":"Active"}</span></div>
+    <div class="lim-head" style="margin-top:14px"><span>Dépensé ce mois-ci</span><span class="num">${fm0(spent)} / ${fm0(lim)}</span></div>
+    <div class="bar" style="margin-top:8px"><i style="width:${p*100}%;${p>=.9?"background:var(--danger)":""}"></i></div>
+    <div class="cc-flags">${flag(k.online,"En ligne")}${flag(k.nfc,"Sans contact")}${flag(k.abroad,"Hors zone euro")}</div>
+  </div>
+  <h2 class="sec-title">Actions rapides</h2>
+  <div class="grid4">
+    ${tile("nfc",I.nfc,"Sans contact",blocked||k.type==="single")}${tile("online",I.cart,"Payer en ligne",blocked)}${tile("details",I.eye,"Voir les infos",blocked)}${tile("freeze",I.snow,k.frozen?"Dégeler":"Geler",blocked)}
+    ${tile("limits",I.sliders,"Plafonds",blocked)}${tile("wallet",I.phone,"Portefeuille",blocked)}${tile("oppose",I.ban,"Opposition",blocked)}${tile("close",I.trash,"Supprimer")}
+  </div>
+  <section>${secHead("Paiements avec cette carte")}
+    ${txs.length?`<div class="list">${txs.map(txRow).join("")}</div>`:`<div class="empty">Aucun paiement pour l'instant. Essaie « Sans contact » ou « Payer en ligne ».</div>`}</section>
+  ${liveCards().filter(x=>x.status==="active").length<MAX_CARDS?`<button class="lime-big" data-act="newcard">${I.plus} Ajouter une carte</button>`:""}`;
+}
+function cardsAfterRender(){
+  const rail=$("#cardRail"); if(!rail) return;
+  const ids=[...rail.querySelectorAll(".ccard")].map(e=>e.dataset.cardId);
+  rail.scrollLeft=Math.max(0,ids.indexOf(cardSel))*rail.clientWidth;
+  if(fxCard){const el=rail.querySelector(`.ccard[data-card-id="${fxCard.id}"]`); if(el&&!calm()){el.classList.add("fx-"+fxCard.fx); if(fxCard.fx==="issued") setTimeout(()=>burst(el),450);} fxCard=null;}
+  let tm; rail.addEventListener("scroll",()=>{clearTimeout(tm); tm=setTimeout(()=>{
+    const id=ids[Math.round(rail.scrollLeft/rail.clientWidth)]; if(!id||id===cardSel) return;
+    cardSel=id; $("#cardPanel").innerHTML=cardPanel(calc(),S.cards[id]); replay($("#cardPanel"),"swap-fx");
+    document.querySelectorAll("[data-card-dot]").forEach(d=>d.toggleAttribute("aria-current",d.dataset.cardDot===id));
+    haptic(HAP.tap);
+  },90);},{passive:true});
+}
+
+/* ---------- création d'une carte : 4 étapes ---------- */
+function newCardFlow(){
+  if(liveCards().filter(k=>k.status==="active").length>=MAX_CARDS){toast(`Tu peux avoir ${MAX_CARDS} cartes actives au maximum.`);return;}
+  if(!kycOk()){kycSheet(newCardFlow);return;}   // identité vérifiée obligatoire avant d'émettre une carte
+  cw={step:0,type:"virtual",design:"citron",holder:(displayName()||"").toUpperCase(),name:"",limit:500,online:true,nfc:true,abroad:false};
+  wizard(1);
+}
+function wizard(dir){
+  const st=cw.step, single=cw.type==="single";
+  const prev=`<div class="pay-card">${cardVisual({type:cw.type,design:cw.design,pan:"0000000000000000",exp:"MM/AA",holder:cw.holder},{cls:"preview",label:false})}</div>`;
+  const dots=`<div class="steps" role="img" aria-label="Étape ${st+1} sur 4">${[0,1,2,3].map(i=>`<i class="${i<=st?"on":""}"></i>`).join("")}</div>`;
+  const back=st?`<button class="btn ghost" data-cw="back">Retour</button>`:`<button class="btn ghost" data-close>Annuler</button>`;
+  const next=`<button class="btn pri" style="flex:1" data-cw="next">Continuer</button>`;
+  let body="";
+  if(st===0) body=`<h2>Quelle carte veux-tu ?</h2><div class="opt-list">
+      ${Object.entries(CARD_TYPES).map(([k,v])=>`<button type="button" class="opt" data-cw-type="${k}" aria-pressed="${cw.type===k}"><span class="sq">${k==="single"?I.cart:I.card}</span><span><b>${v.label}</b><small>${v.desc}</small></span></button>`).join("")}
+      <button type="button" class="opt" disabled><span class="sq">${I.card}</span><span><b>Carte physique</b><small>Bientôt</small></span></button></div>
+    <div class="row">${back}${next}</div>`;
+  if(st===1) body=`<h2>Choisis son style</h2>${prev}
+    <div class="designs" role="group" aria-label="Style de la carte">${DESIGNS.map(([k,l])=>`<button type="button" class="dsg" data-cw-design="${k}" aria-pressed="${cw.design===k}"><span class="sw-c d-${k}"><span class="cc-pat"></span></span>${l}</button>`).join("")}</div>
+    <label class="f">Nom sur la carte<input class="in" id="cwHolder" maxlength="24" autocomplete="name" value="${esc(cw.holder)}"></label>
+    <label class="f">Surnom, pour toi (facultatif)<input class="in" id="cwName" maxlength="24" placeholder="ex. Achats en ligne" value="${esc(cw.name)}"></label>
+    <div class="err" id="cwErr"></div>
+    <div class="row">${back}${next}</div>`;
+  if(st===2) body=`<h2>Règle ta carte</h2>
+    <label class="f">Plafond par mois : <b id="cwLimV" style="color:var(--ink)">${fm0(cw.limit)}</b><input type="range" class="range" id="cwLim" min="50" max="3000" step="50" value="${cw.limit}"></label>
+    <div>${sw("cwOnline","Paiements en ligne","Chaque achat est validé dans CauriPay (3-D Secure)",cw.online)}
+      ${sw("cwNfc","Sans contact",single?"Pas disponible sur une carte à usage unique":"Avec ton téléphone, en magasin",!single&&cw.nfc,single)}
+      ${sw("cwAbroad","Paiements hors zone euro","Désactivés par défaut, par sécurité",cw.abroad)}</div>
+    <div class="row">${back}${next}</div>`;
+  if(st===3) body=`<h2>Vérifie et confirme</h2>${prev}
+    <div class="recap">${recapLine("Type",CARD_TYPES[cw.type].label)}${recapLine("Nom sur la carte",esc(cw.holder))}${recapLine("Plafond",fm0(cw.limit)+" par mois")}
+      ${recapLine("Usages",[cw.online&&"en ligne",!single&&cw.nfc&&"sans contact",cw.abroad&&"hors zone euro"].filter(Boolean).join(", ")||"aucun")}
+      ${recapLine("Prix",DEMO?"Gratuite (démonstration)":"[tarif]")}${recapLine("Émetteur",DEMO?"Démonstration, sans valeur":"[partenaire agréé]")}</div>
+    <label class="chk"><input type="checkbox" id="cwCgu"><span>J'accepte les <a href="legal/cgu.html#carte" target="_blank" rel="noopener">conditions de la carte</a>.</span></label>
+    ${mode!=="cloud"?`<label class="f">Authentification forte : ton mot de passe${pwBox("cwPw")}</label>`:""}
+    <div class="err" id="cwErr"></div>
+    <div class="row">${back}<button class="btn pri" style="flex:1" id="cwGo" data-cw="create">Créer ma carte</button></div>`;
+  setSheet(dots+body,null,dir);
+}
+function wizNav(a){
+  if(a==="create"){cwCreate();return;}
+  if(cw.step===1){cw.holder=$("#cwHolder").value.trim().replace(/\s+/g," ").toUpperCase(); cw.name=$("#cwName").value.trim();}
+  if(cw.step===2){cw.limit=+$("#cwLim").value; cw.online=$("#cwOnline").checked; cw.nfc=$("#cwNfc").checked; cw.abroad=$("#cwAbroad").checked;}
+  if(a==="next"){
+    if(cw.step===1&&cw.holder.length<2){$("#cwErr").textContent="Indique le nom à afficher sur la carte.";return;}
+    cw.step++; wizard(1);
+  }else{cw.step--; wizard(-1);}
+  haptic(HAP.tap);
+}
+async function cwCreate(){
+  const err=m=>{$("#cwErr").textContent=m;}, btn=$("#cwGo");
+  if(!$("#cwCgu").checked) return err("Accepte les conditions de la carte.");
+  if(mode!=="cloud"){
+    const pw=$("#cwPw").value; if(!pw) return err("Indique ton mot de passe.");
+    btn.disabled=true; btn.textContent="Vérification…";
+    try{await Auth.signIn({email:user.email,password:pw});}catch(e){btn.disabled=false; btn.textContent="Créer ma carte"; return err(e.message||"Mot de passe incorrect.");}
+  }
+  const id=uid();
+  write("cards",id,{id,type:cw.type,design:cw.design,holder:cw.holder,name:cw.name||CARD_TYPES[cw.type].label,...newNumbers(),limit:cw.limit,
+    online:cw.online,nfc:cw.type!=="single"&&cw.nfc,abroad:cw.abroad,frozen:false,status:"active",nfcSince:{sum:0,count:0},createdAt:Date.now()});
+  cw=null; cardSel=id; fxCard={id,fx:"issued"}; closeModal();
+  if(tab!=="cartes") goTab("cartes"); else render();
+  haptic(HAP.ok); toast("Ta carte CauriPay est prête");
+}
+
+/* ---------- voir les infos (après authentification forte) ---------- */
+function reauth(title,why,next){
+  if(mode==="cloud"){next();return;}
+  openModal(`<span class="big-ico">${I.lock}</span><h2>${title}</h2><p class="muted">${why}</p>
+    <label class="f">Mot de passe${pwBox("raPw")}</label>
+    <div class="err" id="raErr"></div>
+    <div class="row"><button class="btn ghost" data-close>Annuler</button><button class="btn pri" style="flex:1" id="raGo">Confirmer</button></div>`,()=>{
+    const go=async()=>{const pw=$("#raPw").value; if(!pw){$("#raErr").textContent="Indique ton mot de passe.";return;}
+      const b=$("#raGo"); b.disabled=true;
+      try{await Auth.signIn({email:user.email,password:pw});}catch(e){b.disabled=false; $("#raErr").textContent=e.message||"Mot de passe incorrect."; return;}
+      next();};
+    $("#raGo").onclick=go; $("#raPw").addEventListener("keydown",e=>{if(e.key==="Enter") go();});
+    setTimeout(()=>{const p=$("#raPw"); if(p) p.focus();},60);
+  });
+}
+function detailsSheet(k){
+  let left=60;
+  setSheet(`<h2>Infos de la carte</h2>
+    <div class="flip" id="flip"><div class="flip-in">${cardVisual(k,{reveal:true,tilt:false})}${cardBack(k)}</div></div>
+    <button class="link" data-flip style="align-self:center">Retourner la carte</button>
+    <div class="recap">
+      <div><span>Numéro</span><b class="num">${fmtPan(k.pan)} <button class="iconbtn" data-copy-raw="${k.pan}" aria-label="Copier le numéro">${I.copy}</button></b></div>
+      ${recapLine("Expiration",k.exp)}${recapLine("Cryptogramme",k.cvv)}${recapLine("Titulaire",esc(k.holder))}
+    </div>
+    <p class="small muted" id="hideIn">Masquage automatique dans 60 s.</p>
+    ${DEMO?`<div class="nudge">Numéro de démonstration (il commence par 0000) : il ne fonctionne sur aucun site. En réel, ces infos s'affichent dans un cadre sécurisé de l'émetteur et ne passent jamais par CauriPay.</div>`:""}
+    <button class="btn ghost block" data-close>Masquer</button>`,()=>{
+    const tick=setInterval(()=>{left--; const h=$("#hideIn"); if(!h){clearInterval(tick);return;} if(left<=0){clearInterval(tick); closeModal(); toast("Infos de la carte masquées"); return;} h.textContent=`Masquage automatique dans ${left} s.`;},1000);
+  },1);
+}
+
+/* ---------- payer : sans contact ou en ligne ---------- */
+function chargeCheck(k,amount,ch){
+  if(!k||k.status!=="active") return "Une opposition a été faite sur cette carte.";
+  if(k.frozen) return "Ta carte est gelée. Dégèle-la pour payer.";
+  if(ch==="nfc"&&!k.nfc) return "Le sans contact est désactivé pour cette carte.";
+  if(ch==="online"&&!k.online) return "Les paiements en ligne sont désactivés pour cette carte.";
+  if(amount>walletBal()) return `Solde insuffisant (${fm(walletBal())}). Recharge ton compte CauriPay.`;
+  if(cardSpent(k.id)+amount>k.limit) return `Plafond mensuel de ${fm0(k.limit)} atteint.`;
+  return "";
+}
+function charge(k,amount,ch,merchant,sca){
+  const now=Date.now(), id=uid(), cats=S.profile.categories||[], re=ch==="nfc"?/course/i:/shop/i, cat=(cats.find(x=>re.test(x.name))||cats[0]||{}).id;
+  write("tx",id,{id,date:todayIso(),cat,amount,note:merchant,kind:"besoin",card:k.id,last4:String(k.pan).slice(-4),channel:ch,createdAt:now});
+  write("wallet","p"+id,{id:"p"+id,amt:-amount,kind:"card",note:merchant,card:k.id,at:now});
+  const nk={...k,lastUsedAt:now};
+  if(ch==="nfc") nk.nfcSince=sca?{sum:0,count:0}:{sum:r2(((k.nfcSince||{}).sum||0)+amount),count:((k.nfcSince||{}).count||0)+1};
+  if(k.type==="single"){Object.assign(nk,newNumbers()); setTimeout(()=>toast("Usage unique : ta carte a reçu un nouveau numéro."),1800);}
+  write("cards",k.id,nk);
+}
+function paySheet(k,ch){
+  const nfc=ch==="nfc";
+  openModal(`<span class="eyebrow" style="text-align:center">${nfc?"Paiement sans contact":"Paiement en ligne"}</span>
+    <div class="pay-card">${cardVisual(k,{tilt:false})}</div>
+    <div class="pay-zone" id="payZone" data-state="idle" data-ch="${ch}" aria-live="polite">
+      <div class="nfc-rings"><i></i><i></i><i></i><span id="payIco">${nfc?I.nfc:I.cart}</span></div>
+      <p id="payMsg">${nfc?`<b>Prêt à payer</b><br><span class="muted">Approche le haut de ton téléphone du terminal.</span>`:`<b>Achat sur un site marchand</b><br><span class="muted">Tu le valideras ici : c'est le 3-D Secure.</span>`}</p></div>
+    <div id="payAuth" class="pay-auth" hidden></div>
+    ${DEMO?`<label class="f">Montant du test<input class="in num" id="payAmt" inputmode="decimal" autocomplete="off" value="${nfc?"12,50":"39,90"}"></label>
+      <button class="btn pri block" id="payGo">${nfc?"Simuler le passage au terminal":"Simuler l'achat"}</button>
+      <p class="small muted">${nfc?"Démonstration : une page web ne peut pas utiliser la puce NFC du téléphone. En réel, la carte CauriPay s'ajoute à Apple Pay ou Google Pay.":"Démonstration : aucun site ne débite cette carte."}</p>`:""}
+    <button class="btn ghost block" data-close>Fermer</button>`,()=>{const g=$("#payGo"); if(g) g.onclick=()=>payFlow(k.id,ch);},"pay");
+}
+function setPay(st,html){
+  const z=$("#payZone"); if(!z) return;
+  z.dataset.state=st; $("#payMsg").innerHTML=html;
+  const ico=$("#payIco");
+  ico.innerHTML=st==="ok"?`<span class="ok-draw">${I.check}</span>`:st==="err"?I.alert:st==="auth"?I.lock:(z.dataset.ch==="nfc"?I.nfc:I.cart);
+  if(st==="err") replay($("#payMsg"),"shake");
+}
+// authentification forte dans la fenêtre de paiement : mot de passe (en réel : Face ID, empreinte ou code)
+function scaStep(){return new Promise(res=>{
+  const box=$("#payAuth"), pw=mode!=="cloud"; box.hidden=false;
+  box.innerHTML=`${pw?pwBox("payPw","Ton mot de passe"):""}<div class="err" id="payErr"></div>
+    <div class="row"><button class="btn ghost" id="payNo">Refuser</button><button class="btn pri" style="flex:1" id="payYes">Valider le paiement</button></div>`;
+  const done=v=>{box.hidden=true; box.innerHTML=""; res(v);};
+  $("#payNo").onclick=()=>done(false);
+  const ok=async()=>{
+    if(pw){const p=$("#payPw").value; if(!p){$("#payErr").textContent="Indique ton mot de passe.";return;}
+      $("#payYes").disabled=true;
+      try{await Auth.signIn({email:user.email,password:p});}catch(e){$("#payYes").disabled=false; $("#payErr").textContent=e.message||"Mot de passe incorrect."; return;}}
+    done(true);};
+  $("#payYes").onclick=ok;
+  if(pw){$("#payPw").addEventListener("keydown",e=>{if(e.key==="Enter") ok();}); setTimeout(()=>{const p=$("#payPw"); if(p) p.focus();},60);}
+});}
+async function payFlow(id,ch){
+  const go=$("#payGo"), amount=parseAmt($("#payAmt").value);
+  if(!(amount>0)){setPay("err","<b>Indique un montant.</b>"); haptic(HAP.err); return;}
+  const merchant=pick(ch==="nfc"?MERCHANTS_NFC:MERCHANTS_WEB);
+  go.disabled=true; go.textContent=ch==="nfc"?"Simuler le passage au terminal":"Simuler l'achat";
+  setPay("read",`<b>${ch==="nfc"?"Lecture…":"Connexion au site marchand…"}</b><br><span class="muted">${esc(merchant)} · ${fm(amount)}</span>`);
+  await wait(calm()?150:1100);
+  if(!$("#payZone")) return;
+  let k=S.cards[id], why=chargeCheck(k,amount,ch);
+  if(why){setPay("err",`<b>Paiement refusé</b><br><span class="muted">${why}</span>`); haptic(HAP.err); go.disabled=false; return;}
+  const since=k.nfcSince||{sum:0,count:0}; let sca=false;
+  if(ch==="online"||amount>NFC_ONE||since.sum+amount>NFC_SUM||since.count>=NFC_COUNT){
+    setPay("auth",`<b>Confirme ce paiement</b><br><span class="muted">${ch==="online"?`3-D Secure : ${fm(amount)} chez ${esc(merchant)}.`:`Au-delà de ${NFC_ONE} € par paiement, de ${NFC_SUM} € cumulés ou de ${NFC_COUNT} paiements d'affilée, ton identité doit être vérifiée.`}</span>`);
+    sca=await scaStep();
+    if(!$("#payZone")) return;
+    if(!sca){setPay("err","<b>Paiement annulé</b>"); go.disabled=false; return;}
+    k=S.cards[id]; why=chargeCheck(k,amount,ch);
+    if(why){setPay("err",`<b>Paiement refusé</b><br><span class="muted">${why}</span>`); go.disabled=false; return;}
+  }
+  charge(k,amount,ch,merchant,sca);
+  setPay("ok",`<b>Paiement accepté · ${fm(amount)}</b><br><span class="muted">${esc(merchant)} · ajouté à ton budget</span>`);
+  haptic(HAP.ok); burst($("#payIco")); go.disabled=false; go.textContent="Payer encore"; requestRender();
+}
+
+/* ---------- réglages, recharge, portefeuille, opposition ---------- */
+function limitsSheet(k){
+  const single=k.type==="single";
+  openModal(`<h2>Plafonds et usages</h2>
+    <label class="f">Plafond par mois : <b id="lmV" style="color:var(--ink)">${fm0(k.limit)}</b><input type="range" class="range" id="lmLim" min="50" max="3000" step="50" value="${k.limit}"></label>
+    <div>${sw("lmOnline","Paiements en ligne","Validés dans CauriPay (3-D Secure)",k.online)}${sw("lmNfc","Sans contact",single?"Pas disponible sur une carte à usage unique":"Avec ton téléphone, en magasin",k.nfc,single)}${sw("lmAbroad","Paiements hors zone euro","Désactivés par défaut, par sécurité",k.abroad)}</div>
+    <p class="small muted">Sans contact : au-delà de ${NFC_ONE} € par paiement, de ${NFC_SUM} € cumulés ou de ${NFC_COUNT} paiements d'affilée, CauriPay te demande de confirmer ton identité.</p>
+    <div class="row"><button class="btn ghost" data-close>Annuler</button><button class="btn pri" style="flex:1" id="lmSave">Enregistrer</button></div>`,()=>{
+    $("#lmLim").addEventListener("input",e=>{$("#lmV").textContent=fm0(+e.target.value);});
+    $("#lmSave").onclick=()=>{write("cards",k.id,{...S.cards[k.id],limit:+$("#lmLim").value,online:$("#lmOnline").checked,nfc:!single&&$("#lmNfc").checked,abroad:$("#lmAbroad").checked});
+      closeModal(); render(); haptic(HAP.ok); toast("Réglages de la carte enregistrés");};
+  });
+}
+function topupSheet(){
+  openModal(`<h2>Recharger mon compte</h2>
+    <p class="small muted">L'argent reçu d'Afrique arrive directement sur ton compte CauriPay. Tu peux aussi ajouter un montant de démonstration.</p>
+    <div class="amt-in"><input class="num" id="tuAmt" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Montant"><span>€</span></div>
+    <div class="row" style="justify-content:center">${[20,50,100,200].map(a=>`<button type="button" class="btn sm" data-q="${a}">${a} €</button>`).join("")}</div>
+    <div class="err" id="tuErr"></div>
+    <div class="row"><button class="btn ghost" data-act="receive">Recevoir d'Afrique</button><button class="btn pri" style="flex:1" id="tuGo">Recharger${DEMO?" (démo)":""}</button></div>`,()=>{
+    $("#scrim").addEventListener("click",e=>{const q=e.target.closest("[data-q]"); if(q){$("#tuAmt").value=q.dataset.q; haptic(HAP.tap);}});
+    $("#tuGo").onclick=()=>{const a=parseAmt($("#tuAmt").value);
+      if(!(a>0)){$("#tuErr").textContent="Indique un montant supérieur à 0.";return;}
+      if(a>1000){$("#tuErr").textContent="1 000 € au maximum par recharge.";return;}
+      const id=uid(); write("wallet",id,{id,amt:a,kind:"topup",note:"Recharge de démonstration",at:Date.now()});
+      closeModal(); render(); haptic(HAP.ok); burst(); toast(`${fm(a)} ajoutés à ton compte`);};
+    setTimeout(()=>{const i=$("#tuAmt"); if(i) i.focus();},60);
+  });
+}
+function walletSheet(){
+  openModal(`<span class="big-ico">${I.phone}</span><h2>Payer avec ton téléphone</h2>
+    <p class="muted">Pour payer sans contact en magasin, la carte CauriPay s'ajoute au portefeuille de ton téléphone : Apple Pay sur iPhone, Google Pay sur Android.</p>
+    <ul class="ticks">
+      <li><b>Version réelle :</b> l'ajout se fait depuis l'application CauriPay, avec notre partenaire émetteur. Le vrai numéro n'est jamais stocké sur le téléphone : il est remplacé par un numéro de substitution (jeton).</li>
+      <li><b>Plus tard :</b> une application CauriPay native pourra aussi payer directement en NFC. Sur iPhone, Apple l'autorise dans l'Espace économique européen depuis iOS 17.4, sur demande.</li>
+      <li><b>Cette version web</b> ne peut pas utiliser la puce NFC du téléphone : le sans contact est simulé.</li></ul>
+    <div class="row"><button class="btn ghost" data-close>Fermer</button><button class="btn pri" style="flex:1" data-card-act="nfc">Essayer le sans contact</button></div>`);
+}
+function opposeSheet(k){
+  let why="perdue";
+  openModal(`<h2>Faire opposition</h2>
+    <p class="muted">À utiliser si ta carte ou ses infos sont perdues, volées ou utilisées sans ton accord. L'opposition est <b>définitive</b> : la carte ne pourra plus jamais servir. Pour une simple pause, utilise plutôt « Geler ».</p>
+    <div class="seg" role="group" aria-label="Motif">${[["perdue","Perdue"],["volee","Volée"],["fraude","Fraude"]].map(([v,l])=>`<button type="button" data-why="${v}" aria-pressed="${v===why}">${l}</button>`).join("")}</div>
+    <p class="small muted">Après l'opposition, tu n'es plus responsable des paiements frauduleux. Avant, ta responsabilité est limitée à 50 € (Code monétaire et financier, art. L. 133-19).</p>
+    <div class="row"><button class="btn ghost" data-close>Annuler</button><button class="btn danger" style="flex:1" id="opGo">Faire opposition</button></div>`,()=>{
+    $("#scrim").addEventListener("click",e=>{const b=e.target.closest("[data-why]"); if(b){why=b.dataset.why; document.querySelectorAll("[data-why]").forEach(x=>x.setAttribute("aria-pressed",x.dataset.why===why));}});
+    $("#opGo").onclick=()=>{write("cards",k.id,{...S.cards[k.id],status:"blocked",frozen:false,blockedAt:Date.now(),blockedWhy:why}); fxCard={id:k.id,fx:"freeze"};
+      closeModal(); render(); haptic(HAP.ok); toast("Opposition enregistrée. Tu peux créer une nouvelle carte.");};
+  });
+}
+function cardAct(a){
+  if(a==="topup"){topupSheet();return;}
+  const k=S.cards[cardSel]; if(!k) return;
+  if(a==="nfc"){paySheet(k,"nfc");return;}
+  if(a==="online"){paySheet(k,"online");return;}
+  if(a==="details"){reauth("Voir les infos de la carte","Pour ta sécurité, confirme ton identité avant d'afficher le numéro complet et le cryptogramme.",()=>detailsSheet(S.cards[k.id]));return;}
+  if(a==="freeze"){const f=!k.frozen; write("cards",k.id,{...k,frozen:f}); fxCard={id:k.id,fx:f?"freeze":"thaw"}; haptic(f?HAP.ok:HAP.tap); render();
+    toast(f?"Carte gelée : plus aucun paiement possible.":"Carte dégelée : elle fonctionne à nouveau."); return;}
+  if(a==="limits"){limitsSheet(k);return;}
+  if(a==="wallet"){walletSheet();return;}
+  if(a==="oppose"){opposeSheet(k);return;}
+  if(a==="close"){confirmBox("Supprimer cette carte ?","Elle disparaît de ton appli et ne pourra plus servir. Les paiements déjà faits restent dans ton budget.","Supprimer",()=>{
+    write("cards",k.id,{...S.cards[k.id],status:"closed",closedAt:Date.now()}); cardSel=null; render(); toast("Carte supprimée");}); return;}
+}
+
 /* ============ sheets ============ */
 let lastFocus=null;
-function openModal(html,onMount){
-  if(!$("#scrim")) lastFocus=document.activeElement;
-  $("#modalSlot").innerHTML=`<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true" tabindex="-1">${html}</div></div>`;
+function openModal(html,onMount,cls){
+  const prev=$("#scrim");
+  if(!prev) lastFocus=document.activeElement; else prev.remove();
+  $("#modalSlot").insertAdjacentHTML("beforeend",`<div class="scrim${prev?" swap":""}" id="scrim"><div class="sheet ${cls||""}" role="dialog" aria-modal="true" tabindex="-1">${html}</div></div>`);
   $("#scrim").addEventListener("click",e=>{if(e.target.id==="scrim") closeModal();});
   onMount&&onMount();
-  if(!$("#scrim").contains(document.activeElement)) $(".sheet").focus();
+  if(!$("#scrim").contains(document.activeElement)) $("#scrim .sheet").focus();
 }
-function closeModal(){$("#modalSlot").innerHTML=""; if(lastFocus&&document.contains(lastFocus)) try{lastFocus.focus();}catch(e){} lastFocus=null; if(dirty){dirty=false;render();}}
-function toast(t){$("#toastSlot").innerHTML=`<div class="toast" role="status">${esc(t)}</div>`;clearTimeout(toast.t);toast.t=setTimeout(()=>$("#toastSlot").innerHTML="",2800);}
+// remplace le contenu de la fenêtre ouverte (étapes d'un parcours), ou en ouvre une
+function setSheet(html,onMount,dir){
+  const sh=$("#scrim .sheet"); if(!sh){openModal(html,onMount);return;}
+  sh.innerHTML=html; sh.scrollTop=0; replay(sh,dir<0?"step-b":"step-f"); onMount&&onMount();
+}
+function closeModal(){
+  const sc=$("#scrim");
+  if(sc){ // la fenêtre glisse vers le bas avant de disparaître ; ses id sont retirés pour ne pas gêner la suivante
+    sc.removeAttribute("id"); sc.querySelectorAll("[id]").forEach(n=>n.removeAttribute("id"));
+    sc.classList.add("closing"); sc.style.pointerEvents="none"; setTimeout(()=>sc.remove(),calm()?0:230);
+  }
+  if(lastFocus&&document.contains(lastFocus)) try{lastFocus.focus();}catch(e){} lastFocus=null; if(dirty){dirty=false;render();}
+}
+function toast(t){
+  const slot=$("#toastSlot"); slot.innerHTML=`<div class="toast" role="status">${esc(t)}</div>`; clearTimeout(toast.t);
+  toast.t=setTimeout(()=>{const el=slot.firstElementChild; if(!el) return; el.classList.add("out"); setTimeout(()=>{if(el.parentNode) el.remove();},calm()?0:230);},2800);
+}
 function confirmBox(title,text,label,fn){
   openModal(`<h2>${esc(title)}</h2><p class="muted">${esc(text)}</p><div class="row" style="justify-content:flex-end"><button class="btn ghost" data-close>Annuler</button><button class="btn danger" id="cfBoxOk">${esc(label)}</button></div>`,()=>{$("#cfBoxOk").onclick=()=>{closeModal();fn();};});
 }
 function actionsSheet(){
   const t=(a,ic,l)=>`<button class="tile2" data-act="${a}"><span class="sq">${ic}</span>${l}</button>`;
-  openModal(`<h2>Que veux-tu faire ?</h2><div class="grid2">${t("expense",I.up,"Noter une dépense")}${t("receive",I.down,"Recevoir d'Afrique")}${t("deposit",I.piggy,"Mettre de côté")}${t("wish",I.bag,"Noter une envie")}</div>`);
+  openModal(`<h2>Que veux-tu faire ?</h2><div class="grid2">${t("pay",I.nfc,"Payer sans contact")}${t("receive",I.down,"Recevoir d'Afrique")}${t("expense",I.up,"Noter une dépense")}${t("deposit",I.piggy,"Mettre de côté")}${t("newcard",I.card,"Créer une carte")}${t("wish",I.bag,"Noter une envie")}</div>`);
 }
 function notifsSheet(){
   const list=notifs(calc());
@@ -1111,8 +1519,11 @@ function potMoveSheet(potId,dir,preset){
       if(!(a>0)){$("#pmErr").textContent="Indique un montant supérieur à 0.";return;}
       if(dir<0&&a>p.balance){$("#pmErr").textContent=`Ce projet ne contient que ${fm(p.balance)}.`;return;}
       const moves=[...(p.moves||[]),{d:todayIso(),amt:dir*a,note:$("#pmNote").value.trim()}].slice(-200);
-      write("pots",p.id,{...p,balance:r2(p.balance+dir*a),moves});
-      closeModal();render();toast(dir>0?`${fm0(a)} mis de côté pour « ${p.name} »`:`${fm0(a)} retirés de « ${p.name} »`);};
+      const nb=r2(p.balance+dir*a), reached=dir>0&&p.target>0&&p.balance<p.target&&nb>=p.target;
+      write("pots",p.id,{...p,balance:nb,moves});
+      closeModal();render();
+      if(reached){toast(`Objectif atteint pour « ${p.name} » !`); haptic(HAP.ok); burst();}
+      else toast(dir>0?`${fm0(a)} mis de côté pour « ${p.name} »`:`${fm0(a)} retirés de « ${p.name} »`);};
     setTimeout(()=>$("#pmAmt").focus(),60);
   });
 }
@@ -1220,8 +1631,8 @@ function deleteAccountFlow(title,text,label,done){
     user=null; S=emptyState(); mode="pending"; phase="auth"; authView="signup"; tab="accueil"; navStack=[]; render(); toast(done);
   });
 }
-function copyText(s){
-  const done=()=>toast("Lien copié");
+function copyText(s,label){
+  const done=()=>toast(label||"Lien copié");
   if(navigator.clipboard&&window.isSecureContext) navigator.clipboard.writeText(s).then(done,()=>fallback());
   else fallback();
   function fallback(){const ta=document.createElement("textarea"); ta.value=s; ta.setAttribute("readonly",""); ta.style.position="fixed"; ta.style.opacity="0";
@@ -1233,7 +1644,7 @@ function copyText(s){
 let holdT=null, holdStart=0;
 document.addEventListener("pointerdown",e=>{const b=e.target.closest("#holdBtn"); if(!b||e.button>0) return;
   b.classList.add("holding"); holdStart=Date.now();
-  holdT=setTimeout(()=>{holdT=null; b.classList.remove("holding"); if(navigator.vibrate) navigator.vibrate(25); rxSubmit();},950);});
+  holdT=setTimeout(()=>{holdT=null; b.classList.remove("holding"); haptic(HAP.hold); rxSubmit();},950);});
 function holdEnd(){ if(!holdT) return; clearTimeout(holdT); holdT=null; const b=$("#holdBtn"); if(b) b.classList.remove("holding");
   if(Date.now()-holdStart<600) toast("Garde le doigt appuyé une seconde"); }
 document.addEventListener("pointerup",holdEnd); document.addEventListener("pointercancel",holdEnd);
@@ -1244,6 +1655,14 @@ document.addEventListener("click",e=>{
   const t=e.target.closest("button"); if(!t) return;
   if(t.hasAttribute("data-close")){closeModal();return;}
   if(t.id==="holdBtn"){ if(e.detail===0) rxSubmit(); return; }   // clic clavier (Entrée, Espace) : pas besoin d'appui long
+  if(t.dataset.cardAct){cardAct(t.dataset.cardAct);return;}
+  if(t.dataset.cardDot){const rail=$("#cardRail"), ids=liveCards().map(k=>k.id), j=ids.indexOf(t.dataset.cardDot); if(rail&&j>=0) rail.scrollTo({left:j*rail.clientWidth,behavior:calm()?"auto":"smooth"}); return;}
+  if(t.dataset.cw){wizNav(t.dataset.cw);return;}
+  if(t.dataset.cwType){cw.type=t.dataset.cwType; document.querySelectorAll("[data-cw-type]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.cwType===cw.type)); haptic(HAP.tap); return;}
+  if(t.dataset.cwDesign){cw.design=t.dataset.cwDesign; document.querySelectorAll("[data-cw-design]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.cwDesign===cw.design));
+    const pv=$(".ccard.preview"); if(pv){DESIGNS.forEach(([k])=>pv.classList.remove("d-"+k)); pv.classList.add("d-"+cw.design); replay(pv,"fx-thaw");} haptic(HAP.tap); return;}
+  if(t.hasAttribute("data-flip")){const f=$("#flip"); if(f) f.classList.toggle("flipped"); haptic(HAP.tap); return;}
+  if(t.dataset.copyRaw){copyText(t.dataset.copyRaw,"Numéro copié");return;}
   if(t.hasAttribute("data-back")){goTab(navStack.pop()||"accueil",true);return;}
   if(t.dataset.auth){const a=t.dataset.auth; authErr=""; authMsg="";
     if(a==="resend"){Auth.resend(pendingEmail).then(()=>{authMsg="E-mail renvoyé.";render();},er=>{authErr=er.message;render();});return;}
@@ -1277,7 +1696,10 @@ document.addEventListener("click",e=>{
   const a=t.dataset.act;
   if(a==="actions"){actionsSheet();return;}
   if(a==="notifs"){notifsSheet();return;}
-  if(a==="toggleweek"){weekOpen=!weekOpen;render();return;}
+  if(a==="toggleweek"){weekOpen=!weekOpen; const w=$("#weekMore"); if(w){w.hidden=!weekOpen; if(weekOpen) replay(w,"open-fx");}
+    const n=$(".notch"); if(n){n.setAttribute("aria-expanded",weekOpen); n.setAttribute("aria-label",(weekOpen?"Masquer":"Afficher")+" le détail de la semaine");} haptic(HAP.tap); return;}
+  if(a==="pay"){const k=activeCard(); if(!k){toast("Crée d'abord ta carte CauriPay."); newCardFlow(); return;} cardSel=k.id; paySheet(k,"nfc"); return;}
+  if(a==="newcard"){newCardFlow();return;}
   if(a==="receive"){rx.tab="new"; goTab("transfert"); return;}
   if(a==="wish"){goTab("envies"); setTimeout(()=>{const w=$("#wishName"); if(w) w.focus();},60); return;}
   if(a==="newcontact"){contactSheet();return;}
@@ -1313,7 +1735,7 @@ document.addEventListener("click",e=>{
     write("wishes",w.id,nw);
     if(nw.status==="bought"){const k=S.profile.categories.find(x=>/shop/i.test(x.name))||S.profile.categories[0]; const id=uid();
       write("tx",id,{id,date:todayIso(),cat:k.id,amount:w.price,note:w.name,kind:"envie",createdAt:Date.now()}); toast("Ajouté à tes dépenses");}
-    else toast(`${fm0(w.price)} gardés dans ta poche`);
+    else{toast(`${fm0(w.price)} gardés dans ta poche`); haptic(HAP.ok); burst(t);}
     render();return;}
 });
 document.addEventListener("submit",e=>{
@@ -1334,6 +1756,8 @@ document.addEventListener("keydown",e=>{
 });
 document.addEventListener("input",e=>{const el=e.target;
   if(el.id==="obSave") ob.save=el.value; if(el.id==="obIncome") ob.income=el.value; if(el.id==="obFixed") ob.fixed=el.value; if(el.id==="obName") ob.name=el.value;
+  if(el.id==="cwHolder"){const b=$(".ccard.preview .cc-holder"); if(b) b.textContent=el.value.trim().toUpperCase()||"—";}
+  if(el.id==="cwLim"){const v=$("#cwLimV"); if(v) v.textContent=fm0(+el.value);}
   if(el.id==="auPw"&&$("#pwRules")){const r=Auth.checkPassword(el.value); document.querySelectorAll("#pwRules [data-rule]").forEach(li=>li.classList.toggle("ok",!!r[li.dataset.rule]));}
 });
 document.addEventListener("change",e=>{
@@ -1343,6 +1767,12 @@ document.addEventListener("change",e=>{
   if(el.dataset.catName){const v=el.value.trim(); if(v) editProfile(np=>{const k=np.categories.find(x=>x.id===el.dataset.catName); if(k) k.name=v;}); return;}
   if(el.dataset.catBudget){const v=parseAmt(el.value||"0"); editProfile(np=>{const k=np.categories.find(x=>x.id===el.dataset.catBudget); if(k) k.budget=v>0?v:0;}); dirty=true; return;}
 });
+new MutationObserver(ms=>{for(const m of ms){const n=m.target.nodeType===1?m.target:m.target.parentElement, e=n&&n.closest&&n.closest(".err");
+  if(e&&e.textContent.trim()){replay(e,"shake"); haptic(HAP.err); break;}}}).observe(document.body,{subtree:true,childList:true,characterData:true});
+// inclinaison et reflet des cartes sous le doigt ou la souris
+document.addEventListener("pointermove",e=>{const k=e.target.closest&&e.target.closest(".ccard.tilt"); if(!k||calm()) return; const r=k.getBoundingClientRect(), x=(e.clientX-r.left)/r.width, y=(e.clientY-r.top)/r.height;
+  k.style.setProperty("--ry",((x-.5)*14).toFixed(2)+"deg"); k.style.setProperty("--rx",((.5-y)*10).toFixed(2)+"deg"); k.style.setProperty("--mx",(x*100).toFixed(0)+"%"); k.style.setProperty("--my",(y*100).toFixed(0)+"%");},{passive:true});
+document.addEventListener("pointerout",e=>{const k=e.target.closest&&e.target.closest(".ccard.tilt"); if(k&&!k.contains(e.relatedTarget)){k.style.removeProperty("--rx"); k.style.removeProperty("--ry");}});
 setInterval(()=>{ if(phase!=="app") return; tickDemo(); if(tab==="envies"||tab==="accueil"||tab==="transfert") requestRender(); },60000);
 
 /* ============ boot ============ */

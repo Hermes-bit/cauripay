@@ -7,6 +7,8 @@ Appli de budget personnel pensée pour arrêter de finir le mois dans le rouge, 
 - **Épargne** : des projets avec un montant visé et une date. L'appli calcule combien verser par mois et par semaine
 - **Rattrapage** : si un mois dépasse, tu étales le dépassement sur 1 à 3 mois et tes budgets baissent automatiquement
 - **Règle des 48 h** contre les achats impulsifs
+- **Cartes CauriPay** (démonstration) : carte virtuelle ou à usage unique au motif de cauris, 4 styles, paiement en ligne validé (3-D Secure), sans contact simulé, gel, plafonds, opposition. Chaque paiement s'ajoute au budget
+- **Effets** : écrans qui glissent, montants qui défilent, vibrations sur Android, pluie de cauris pour les réussites. L'option « réduire les animations » du téléphone est respectée
 - **Recevoir d'Afrique** (démonstration) : tu crées une demande en euros, ton proche paie en F CFA par mobile money (Wave, Orange Money, MTN…) et tu suis l'arrivée de l'argent
 - **Tes données** : export en fichier `.json` et suppression du compte
 
@@ -48,6 +50,7 @@ cauripay/
 | Le calcul du budget de la semaine              | `js/app.js`, fonction `calc()`                                |
 | L'écran d'accueil                              | `js/app.js`, fonction `vHome()`                               |
 | L'écran « Recevoir d'Afrique »                 | `js/app.js`, fonction `vTransfer()`                           |
+| Les cartes (styles, seuils, commerçants de test) | `js/app.js`, section « cartes CauriPay » (`DESIGNS`, `NFC_ONE`…) et `css/style.css` (`.d-citron`…) |
 | L'écran de connexion                           | `js/app.js`, fonction `vAuth()`                               |
 | Les textes légaux                              | `legal/*.html` (les passages surlignés sont à compléter)      |
 
@@ -98,6 +101,19 @@ Bouton **Recevoir** sur l'accueil, ou bouton central de la barre du bas.
 Les pays ouverts sont ceux dont la monnaie a un **taux fixe avec l'euro** : zone franc CFA (UEMOA et CEMAC), Comores, Cap-Vert. Les autres sont affichés « bientôt ».
 
 Pour passer au réel, la simulation est à remplacer par l'API d'un partenaire agréé : fonctions `simulate()` et `vPayer()` dans `js/app.js`. Le détail est dans [docs/CONFORMITE.md](docs/CONFORMITE.md).
+
+---
+
+## Les cartes CauriPay (démonstration)
+
+Onglet **Cartes** dans la barre du bas.
+
+1. **Créer ma carte** : vérification d'identité (simulée), choix du type, du style et des plafonds, puis acceptation des conditions et confirmation par mot de passe.
+2. **Recharger** le compte CauriPay. L'argent reçu d'Afrique y arrive aussi automatiquement.
+3. **Sans contact** ou **Payer en ligne** : un paiement de test. Au-delà de 50 €, ou pour tout achat en ligne, l'appli demande ton mot de passe : c'est l'authentification forte exigée par la réglementation.
+4. **Geler**, **Plafonds**, **Opposition**, **Voir les infos** (après mot de passe, masquées au bout de 60 secondes).
+
+Les numéros de carte commencent par 0000 : ils ne fonctionnent nulle part. Pour de vraies cartes, il faut un émetteur agréé ; le détail est en section 9 de [docs/CONFORMITE.md](docs/CONFORMITE.md).
 
 ---
 

@@ -69,7 +69,7 @@ Le franc CFA (XOF et XAF), le franc comorien et l'escudo cap-verdien sont liés 
 | **C. Établissement de paiement** agréé par l'ACPR | Fournit lui-même le service | Capital minimum de **20 000 €** pour la seule transmission de fonds (arrêté du 29 octobre 2009, art. 4), dossier d'agrément de 6 à 12 mois, contrôle interne, protection des fonds des clients, dispositif anti-blanchiment complet | 6 à 12 mois |
 | **D. Établissement de monnaie électronique** | Tient des soldes « CauriPay » | Capital de 350 000 € et exigences renforcées | Plus d'un an |
 
-**Recommandation : commencer par A, puis passer à B.** Ne pas créer de « solde CauriPay » : l'argent doit être versé directement sur le compte bancaire (IBAN) de l'utilisateur par le partenaire. Sinon, l'activité devient de l'émission de monnaie électronique.
+**Recommandation : commencer par A, puis passer à B.** CauriPay ne doit **jamais tenir elle-même** de solde. Le « compte CauriPay » et les cartes de l'appli doivent être ouverts chez le partenaire agréé, sous forme de compte de paiement ou de monnaie électronique. Sans cartes, le plus simple est de verser l'argent directement sur le compte bancaire (IBAN) de l'utilisateur. Voir la section 9.
 
 ---
 
@@ -174,6 +174,51 @@ Le risque est réel, puisqu'il s'agit des mêmes services (paiement, transfert).
 
 ---
 
+## 9. Cartes CauriPay et paiement sans contact
+
+### 9.1 Qui peut émettre une carte
+
+Émettre une carte de paiement est un service de paiement réglementé : c'est l'émission d'instruments de paiement (Code monétaire et financier, art. L. 314-1). Il faut :
+- un établissement agréé (banque, établissement de paiement ou de monnaie électronique) ;
+- membre d'un réseau de cartes comme Visa ou Mastercard, ou parrainé par un membre.
+
+La voie réaliste est un partenaire de **« banque en marque blanche »** (*Banking as a Service*), qui fournit le compte, les cartes et la conformité. CauriPay en est le distributeur ou l'agent. Exemples d'acteurs à étudier en France, sans recommandation : Swan, Treezor.
+
+**Marques :** ne pas afficher les logos Visa ou Mastercard sans l'accord du réseau. La démo affiche seulement « DÉMO ».
+
+### 9.2 Ce que la loi impose, et ce que la démo simule déjà
+
+| Règle | Dans l'appli |
+| --- | --- |
+| Identité vérifiée avant toute émission (lutte contre le blanchiment) | **Simulé** : vérification d'identité obligatoire avant la création |
+| Personnes majeures, contrat de carte accepté | **Fait** : case à cocher et section 9 des CGU |
+| Authentification forte (règlement délégué (UE) 2018/389) pour créer une carte et en afficher le numéro | **Simulé** : mot de passe demandé. En réel, il faut un second facteur (code, biométrie). |
+| Paiements en ligne validés par 3-D Secure | **Simulé** : validation dans l'appli à chaque achat |
+| Sans contact : authentification au-delà de 50 € par paiement, de 150 € cumulés ou de 5 paiements d'affilée (article 11 du même règlement) | **Simulé** : les trois seuils sont appliqués |
+| Numéro et cryptogramme jamais stockés ni transmis par CauriPay (norme **PCI DSS**) | **À faire en réel** : afficher ces infos dans le cadre sécurisé de l'émetteur (iframe ou SDK, lien à usage unique). En démo, le numéro est faux (préfixe 0000). |
+| Opposition possible à tout moment (CMF, art. L. 133-17) | **Fait** : bouton « Opposition », définitif. Prévoir aussi un numéro d'urgence 24 h/24. |
+| Responsabilité du client limitée à 50 € avant opposition, aucune après (CMF, art. L. 133-19 et L. 133-20) | **Fait** : rappel dans l'appli et les CGU |
+| Plafonds et usages réglables, gel temporaire | **Fait** |
+| Transparence des frais | **Fait** : « Gratuite (démonstration) » affiché à la création. Grille réelle à définir. |
+
+### 9.3 Payer avec le téléphone
+
+1. **Apple Pay et Google Pay.** C'est la voie classique : l'émetteur ajoute la carte au portefeuille du téléphone par **tokenisation**. Le vrai numéro est remplacé par un numéro de substitution propre à l'appareil (services Visa Token Service ou Mastercard MDES). L'ajout depuis l'appli exige une **application native** et, chez Apple, une autorisation spécifique (*In-App Provisioning*). Les paiements par téléphone sont validés par Face ID, une empreinte ou un code : ils échappent donc au plafond de 50 €.
+2. **Un « CauriPay Pay » maison, comme Apple Pay.** Depuis iOS 17.4, Apple autorise dans l'Espace économique européen des applications tierces à payer en NFC (technologie HCE). Il faut pour cela :
+   - être établi dans l'EEE et inscrit comme organisation au programme développeur d'Apple ;
+   - respecter PCI DSS et les certifications EMVCo ;
+   - travailler avec un prestataire de paiement agréé ;
+   - obtenir l'autorisation d'Apple, accordée au cas par cas ([Apple](https://developer.apple.com/support/hce-transactions-in-apps)).
+
+   Sur Android, la même technologie est ouverte. C'est un projet de long terme, pour une application native.
+3. **Une application web**, comme la version actuelle, **ne peut pas** utiliser la puce NFC pour payer. Le sans contact est donc simulé.
+
+### 9.4 Modèle économique
+
+Dans l'Union européenne, la commission d'interchange perçue sur chaque paiement par carte de particulier est plafonnée à **0,2 %** (débit) et **0,3 %** (crédit) par le règlement (UE) 2015/751. Une carte rapporte donc peu par paiement : à intégrer dans le plan d'affaires.
+
+---
+
 ## Sources consultées (octobre 2026)
 
 - PSD3 et RSP, calendrier : [Clifford Chance, avril 2026](https://www.cliffordchance.com/content/dam/cliffordchance/briefings/2026/04/impact-of-psd3-are-you-ready.pdf) · [Adyen](https://www.adyen.com/en_AE/knowledge-hub/psd3) · [fintech.global, août 2026](https://fintech.global/2026/08/14/psd3-is-coming-is-your-payments-licence-ready-for-2028/)
@@ -185,4 +230,5 @@ Le risque est réel, puisqu'il s'agit des mêmes services (paiement, transfert).
 - Fonction de rétractation : [HLC, transposition française](https://hlc.com/fr/publications/transposition-under-french-law-of-the-eu-mandatory-withdrawal-button-for-online-sales) · [iubenda](https://www.iubenda.com/fr/blog/la-nouvelle-fonction-de-retractation-en-ligne-ce-que-signifie-la-directive-ue-2023-2673-pour-votre-entreprise/)
 - Mots de passe : [Clubic, recommandation CNIL 2022](https://www.clubic.com/pro/it-business/securite-et-donnees/actualite-442581-mots-de-passe-la-cnil-fait-ses-recommandations-etes-vous-dans-les-clous.html) · [Solutions numériques](https://www.solutions-numeriques.com/juridique-mots-de-passe-quelles-recommandations-de-la-cnil)
 - Établissement de paiement, capital : [Crassula, guide 2026](https://crassula.io/fr/guides/comment-creer-une-entreprise-de-transfert-dargent/) · [ACPR, sécurité des paiements](https://acpr.banque-france.fr/system/files/import/acpr/medias/documents/jch_20180403_conference_securite_des_paiements.pdf)
+- Cartes et sans contact : [Apple, transactions NFC HCE dans l'EEE](https://developer.apple.com/support/hce-transactions-in-apps) · [Commission européenne, engagements d'Apple sur le NFC (2024)](https://ec.europa.eu/commission/presscorner/api/files/document/print/fin/ip_24_3706/IP_24_3706_EN.pdf) · [Selectra, plafonds du sans contact](https://selectra.info/finance/actualites/marche/sans-contact-refuse-paiement-telephone-passe) · [Reap, affichage sécurisé des cartes](https://docs.reap.global/cards/secure-display) · [Lithic, affichage du numéro et du cryptogramme](https://docs.lithic.com/docs/quick-start-card-ui)
 - Accessibilité : [DGCCRF](https://www.economie.gouv.fr/node/3235045) · [Qualibooth, décret 2023-931](https://www.qualibooth.com/accessibility/compliance/europe/france---decree-number-2023-931)
