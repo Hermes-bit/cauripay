@@ -22,7 +22,12 @@
 
 *{box-sizing:border-box}
 [hidden]{display:none!important}
-html,body{background:var(--bg);margin:0}
+html,body{background:var(--bg);margin:0;height:100%;overflow:hidden;overscroll-behavior:none}
+/* L'appli défile dans son propre conteneur, comme une appli mobile : pas de barre de défilement, pas de rebond */
+#scroller{position:fixed;inset:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:none;-webkit-overflow-scrolling:touch}
+body.sheet-open #scroller{overflow:hidden}
+*{scrollbar-width:none;-ms-overflow-style:none}
+*::-webkit-scrollbar{display:none;width:0;height:0}
 body{color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
 .num{font-variant-numeric:tabular-nums}
@@ -337,7 +342,7 @@ section.view > section{display:flex;flex-direction:column}
 
 /* ---------- fenêtres et formulaires ---------- */
 .scrim{position:fixed;inset:0;background:rgba(4,8,3,.66);z-index:20;display:flex;align-items:flex-end;justify-content:center}
-.sheet{background:var(--surface);border:1px solid var(--line);border-bottom:0;width:100%;max-width:520px;border-radius:28px 28px 0 0;padding:20px max(20px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(20px,env(safe-area-inset-left,0px));max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.sheet{overscroll-behavior:contain;background:var(--surface);border:1px solid var(--line);border-bottom:0;width:100%;max-width:520px;border-radius:28px 28px 0 0;padding:20px max(20px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(20px,env(safe-area-inset-left,0px));max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:14px}
 .sheet:focus{outline:none}
 .sheet::before{content:"";width:40px;height:5px;border-radius:9px;background:var(--line);align-self:center;margin:-8px 0 2px;flex:none}
 @media (min-width:720px){.scrim{align-items:center}.sheet{border-radius:28px;border-bottom:1px solid var(--line)}.sheet::before{display:none}}
@@ -345,9 +350,12 @@ section.view > section{display:flex;flex-direction:column}
 label.f{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700;color:var(--muted)}
 .in{border:1.5px solid var(--line);background:var(--bg);border-radius:14px;padding:12px 13px;font-size:16px;color:var(--ink);width:100%;min-width:0}
 .in:focus{border-color:var(--lime);outline:none}
+/* iPhone : les champs date et mois ont une largeur minimale propre qui les fait déborder */
+input[type="month"].in,input[type="date"].in{-webkit-appearance:none;appearance:none;display:block;width:100%;min-width:0;min-height:50px;text-align:left}
+input[type="month"].in::-webkit-date-and-time-value,input[type="date"].in::-webkit-date-and-time-value{text-align:left}
 select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 18px) 52%,calc(100% - 13px) 52%;background-size:5px 5px;background-repeat:no-repeat;padding-right:36px}
 select.in option,select.in optgroup{background:var(--surface);color:var(--ink)}
-.amt-in{display:flex;align-items:baseline;justify-content:center;gap:4px;padding:6px 0}
+.amt-in{display:flex;align-items:baseline;justify-content:center;gap:4px;padding:6px 0;cursor:text}
 .amt-in input{font-family:var(--display);font-size:46px;font-weight:700;text-align:right;border:0;background:transparent;color:var(--lime);width:6ch;padding:0;letter-spacing:-.03em}
 .amt-in input:focus{outline:none}
 .amt-in span{font-family:var(--display);font-size:30px;font-weight:600;color:var(--muted)}
@@ -365,7 +373,7 @@ select.in option,select.in optgroup{background:var(--surface);color:var(--ink)}
 .nudge.ok{background:var(--lime-soft)} .nudge.ok b{color:var(--lime)}
 .err{color:var(--danger);font-size:13px;font-weight:600;min-height:1em}
 .err:empty{display:none}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
 @media (max-width:420px){.two{grid-template-columns:1fr}}
 .filters{display:flex;gap:6px;flex-wrap:wrap}
 .filters button{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:7px 13px;font-weight:700;font-size:13px;color:var(--muted)}
@@ -512,15 +520,15 @@ select.in option,select.in optgroup{background:var(--surface);color:var(--ink)}
 .burst i::after{content:"";position:absolute;left:50%;top:3px;bottom:3px;width:1.6px;margin-left:-.8px;border-radius:2px;background:rgba(16,24,10,.6)}
 @keyframes fly{0%{transform:translate(0,0) rotate(0) scale(.5);opacity:1}75%{opacity:1}100%{transform:translate(var(--dx),calc(var(--dy) + 170px)) rotate(var(--r)) scale(1);opacity:0}}
 @media (prefers-reduced-motion:no-preference){
-  .enter > *{animation:rise .44s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0) * 45ms)}
+  .enter > *{animation:rise .32s cubic-bezier(.2,.8,.2,1) backwards;animation-delay:calc(var(--i,0) * 30ms)}
   .scrim{animation:fadeIn .22s ease}
   .scrim.swap{animation:none}
   .sheet{animation:sheetUp .38s cubic-bezier(.2,.9,.25,1)}
   .scrim.swap .sheet{animation:swapIn .24s ease}
   .scrim.closing{animation:fadeOut .22s ease forwards}
   .scrim.closing .sheet{animation:sheetDown .22s ease forwards}
-  .sheet.step-f > *{animation:stepF .3s ease both}
-  .sheet.step-b > *{animation:stepB .3s ease both}
+  .sheet.step-f > *{animation:stepF .26s ease backwards}
+  .sheet.step-b > *{animation:stepB .26s ease backwards}
   .toast{animation:toastIn .32s cubic-bezier(.2,.9,.25,1)}
   .toast.out{animation:toastOut .22s ease forwards}
   .shake{animation:shake .4s}

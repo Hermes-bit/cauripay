@@ -69,6 +69,11 @@ function runCounters(entered){
     requestAnimationFrame(step);
   });
 }
+// iPhone : le clavier ne s'ouvre que si le champ reçoit le focus pendant le toucher lui-même.
+// Un focus donné plus tard ne fait apparaître qu'un curseur, sans clavier : on le réserve donc aux ordinateurs.
+const touchUI=!!(window.matchMedia&&matchMedia("(pointer: coarse)").matches);
+const autoFocus=(el,now)=>{if(!el||(touchUI&&!now)) return; try{el.focus({preventScroll:true});}catch(e){}};
+const scroller=()=>document.getElementById("scroller")||document.scrollingElement;
 const replay=(el,cls)=>{if(!el||calm()) return; el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);};
 
 /* ============ ouverture : le cauri, puis la plongée dans l'appli ============ */
@@ -442,7 +447,7 @@ function goTab(k,isBack){
   if($("#scrim")) closeModal();
   if(k==="transfert"||k==="profil"){ if(!isBack&&tab!==k) navStack.push(tab); }
   else{ navStack=[]; try{localStorage.setItem("cauripay_tab",k);}catch(_){} }
-  tab=k; render(); window.scrollTo({top:0});
+  tab=k; render(); scroller().scrollTo({top:0});
 }
 function navHtml(entered){
   const it=(k,l,ic)=>`<button data-tab="${k}" ${tab===k?`aria-current="page"${entered?' class="just"':""}`:""}>${ic}<span>${l}</span></button>`;
@@ -1041,7 +1046,7 @@ function contactSheet(id){
       $("#ctDial").textContent=co.dial; $("#ctMethods").innerHTML=co.methods.map(k=>`<button type="button" data-meth="${k}" aria-pressed="${k===m}">${esc(METHODS[k])}</button>`).join("");};
     $("#ctCountry").addEventListener("change",upd);
     $("#scrim").addEventListener("click",e=>{const b=e.target.closest("[data-meth]"); if(b){m=b.dataset.meth; upd();}});
-    upd(); if(!x) setTimeout(()=>$("#ctName").focus(),60);
+    upd(); if(!x) autoFocus($("#ctName"));
     $("#ctSave").onclick=()=>{
       const name=$("#ctName").value.trim().replace(/\s+/g," "), phone=$("#ctPhone").value.replace(/\D/g,"");
       if(name.length<2){$("#ctErr").textContent="Indique son nom et son prénom.";return;}
@@ -1327,7 +1332,7 @@ function reauth(title,why,next){
       try{await Auth.signIn({email:user.email,password:pw});}catch(e){b.disabled=false; $("#raErr").textContent=e.message||"Mot de passe incorrect."; return;}
       next();};
     $("#raGo").onclick=go; $("#raPw").addEventListener("keydown",e=>{if(e.key==="Enter") go();});
-    setTimeout(()=>{const p=$("#raPw"); if(p) p.focus();},60);
+    autoFocus($("#raPw"),true);
   });
 }
 function detailsSheet(k){
@@ -1398,7 +1403,7 @@ function scaStep(){return new Promise(res=>{
       try{await Auth.signIn({email:user.email,password:p});}catch(e){$("#payYes").disabled=false; $("#payErr").textContent=e.message||"Mot de passe incorrect."; return;}}
     done(true);};
   $("#payYes").onclick=ok;
-  if(pw){$("#payPw").addEventListener("keydown",e=>{if(e.key==="Enter") ok();}); setTimeout(()=>{const p=$("#payPw"); if(p) p.focus();},60);}
+  if(pw){$("#payPw").addEventListener("keydown",e=>{if(e.key==="Enter") ok();}); autoFocus($("#payPw"));}
 });}
 async function payFlow(id,ch){
   const go=$("#payGo"), amount=parseAmt($("#payAmt").value);
@@ -1441,7 +1446,7 @@ function limitsSheet(k){
 function topupSheet(){
   openModal(`<h2>Recharger mon compte</h2>
     <p class="small muted">L'argent reçu d'Afrique arrive directement sur ton compte CauriPay. Tu peux aussi ajouter un montant de démonstration.</p>
-    <div class="amt-in"><input class="num" id="tuAmt" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Montant"><span>${curSym()}</span></div>
+    <label class="amt-in"><input class="num" id="tuAmt" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Montant"><span>${curSym()}</span></label>
     <div class="row" style="justify-content:center">${[20,50,100,200].map(a=>niceStep(inCur(a))).map(a=>`<button type="button" class="btn sm" data-q="${a}">${fm0(a)}</button>`).join("")}</div>
     <div class="err" id="tuErr"></div>
     <div class="row"><button class="btn ghost" data-act="receive">Recevoir d'Afrique</button><button class="btn pri" style="flex:1" id="tuGo">Recharger${DEMO?" (démo)":""}</button></div>`,()=>{
@@ -1451,7 +1456,7 @@ function topupSheet(){
       if(a>inCur(1000)){$("#tuErr").textContent=`${fm0(inCur(1000))} au maximum par recharge.`;return;}
       const id=uid(); write("wallet",id,{id,amt:a,kind:"topup",note:"Recharge de démonstration",at:Date.now()});
       closeModal(); render(); haptic(HAP.ok); burst(); toast(`${fm(a)} ajoutés à ton compte`);};
-    setTimeout(()=>{const i=$("#tuAmt"); if(i) i.focus();},60);
+    autoFocus($("#tuAmt"),true);
   });
 }
 function walletSheet(){
@@ -1495,6 +1500,7 @@ let lastFocus=null;
 function openModal(html,onMount,cls){
   const prev=$("#scrim");
   if(!prev) lastFocus=document.activeElement; else prev.remove();
+  document.body.classList.add("sheet-open");
   $("#modalSlot").insertAdjacentHTML("beforeend",`<div class="scrim${prev?" swap":""}" id="scrim"><div class="sheet ${cls||""}" role="dialog" aria-modal="true" tabindex="-1">${html}</div></div>`);
   $("#scrim").addEventListener("click",e=>{if(e.target.id==="scrim") closeModal();});
   onMount&&onMount();
@@ -1511,6 +1517,7 @@ function closeModal(){
     sc.removeAttribute("id"); sc.querySelectorAll("[id]").forEach(n=>n.removeAttribute("id"));
     sc.classList.add("closing"); sc.style.pointerEvents="none"; setTimeout(()=>sc.remove(),calm()?0:230);
   }
+  document.body.classList.remove("sheet-open");
   if(lastFocus&&document.contains(lastFocus)) try{lastFocus.focus();}catch(e){} lastFocus=null; if(dirty){dirty=false;render();}
 }
 function toast(t){
@@ -1534,7 +1541,7 @@ function expenseSheet(existing){
   const P=S.profile; const t=existing||{};
   let kind=t.kind||"besoin", cat=t.cat||P.categories[0]?.id;
   openModal(`<h2>${existing?"Modifier la dépense":"Nouvelle dépense"}</h2>
-    <div class="amt-in"><input class="num" id="exAmt" inputmode="decimal" placeholder="0" value="${existing?String(t.amount).replace(".",","):""}" autocomplete="off" aria-label="Montant"><span>${curSym()}</span></div>
+    <label class="amt-in"><input class="num" id="exAmt" inputmode="decimal" placeholder="0" value="${existing?String(t.amount).replace(".",","):""}" autocomplete="off" aria-label="Montant"><span>${curSym()}</span></label>
     <div class="seg" role="group" aria-label="Type de dépense"><button type="button" data-kind="besoin">Besoin</button><button type="button" data-kind="envie">Envie</button></div>
     <div id="nudge" style="display:flex;flex-direction:column;gap:8px"></div>
     <div><div class="eyebrow" style="margin-bottom:8px">Catégorie</div><div class="cats">${P.categories.map(k=>`<button type="button" data-cat="${k.id}"><span class="dot" style="background:${col(k.color)}"></span>${esc(k.name)}</button>`).join("")}</div></div>
@@ -1566,7 +1573,7 @@ function expenseSheet(existing){
       write("tx",id,{id,date:$("#exDate").value||todayIso(),cat,amount:a,note:$("#exNote").value.trim(),kind,createdAt:t.createdAt||Date.now()});
       closeModal();render();toast(existing?"Dépense modifiée":"Dépense ajoutée");};
     if(existing) $("#exDel").onclick=()=>{write("tx",t.id,null);closeModal();render();toast("Dépense supprimée");};
-    if(!existing) setTimeout(()=>$("#exAmt").focus(),60);
+    if(!existing) autoFocus($("#exAmt"),true);
   });
 }
 
@@ -1575,7 +1582,7 @@ function potMoveSheet(potId,dir,preset){
   if(!pots.length){potEditSheet();return;}
   let sel=potId||pots[0].id;
   openModal(`<h2>${dir>0?"Mettre de côté":"Retirer de l'argent"}</h2>
-    <div class="amt-in"><input class="num" id="pmAmt" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Montant" value="${preset?String(r2(preset)).replace(".",","):""}"><span>${curSym()}</span></div>
+    <label class="amt-in"><input class="num" id="pmAmt" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Montant" value="${preset?String(r2(preset)).replace(".",","):""}"><span>${curSym()}</span></label>
     <div class="row" style="justify-content:center">${[10,20,50,100].map(a=>niceStep(inCur(a))).map(a=>`<button type="button" class="btn sm" data-q="${a}">${fm0(a)}</button>`).join("")}</div>
     <div><div class="eyebrow" style="margin-bottom:8px">Projet</div><div class="cats">${pots.map(p=>`<button type="button" data-psel="${p.id}" aria-pressed="${p.id===sel}"><span class="dot" style="background:${col(p.color)}"></span>${esc(p.name)}</button>`).join("")}</div></div>
     <label class="f">Note (facultatif)<input class="in" id="pmNote" maxlength="40" placeholder="${dir>0?"ex. Virement paie":"ex. Réparation voiture"}"></label>
@@ -1592,7 +1599,7 @@ function potMoveSheet(potId,dir,preset){
       closeModal();render();
       if(reached){toast(`Objectif atteint pour « ${p.name} » !`); haptic(HAP.ok); burst();}
       else toast(dir>0?`${fm0(a)} mis de côté pour « ${p.name} »`:`${fm0(a)} retirés de « ${p.name} »`);};
-    setTimeout(()=>$("#pmAmt").focus(),60);
+    autoFocus($("#pmAmt"),true);
   });
 }
 
@@ -1600,7 +1607,7 @@ function potEditSheet(id){
   const p=id?S.pots[id]:null;
   const hist=p?[...(p.moves||[])].reverse().slice(0,30):[];
   openModal(`<h2>${p?esc(p.name):"Nouveau projet d'épargne"}</h2>
-    <label class="f">Nom du projet<input class="in" id="peName" maxlength="40" placeholder="ex. Vacances au Portugal" value="${esc(p?.name||"")}"></label>
+    <label class="f">Nom du projet<input class="in" id="peName" maxlength="40" autocomplete="off" placeholder="ex. Vacances au Portugal" value="${esc(p?.name||"")}"></label>
     <div class="two"><label class="f">Montant visé<input class="in num" id="peTarget" inputmode="decimal" placeholder="ex. 900" value="${p?.target||""}"></label>
     <label class="f">Pour quand ?<input class="in" id="peDate" type="month" value="${p?.deadline||""}"></label></div>
     ${p?"":`<label class="f">Déjà de côté<input class="in num" id="peStart" inputmode="decimal" placeholder="0"></label>`}
@@ -1620,7 +1627,7 @@ function potEditSheet(id){
         write("pots",nid,{id:nid,name:n,target:t||0,deadline:d||"",balance:Math.max(0,s),moves:s>0?[{d:todayIso(),amt:s,note:"Solde de départ"}]:[],color:PALETTE[(cnt+2)%PALETTE.length],createdAt:Date.now()});}
       closeModal();goTab("epargne");toast(p?"Projet mis à jour":"Projet créé");};
     if(p) $("#peDel").onclick=()=>{closeModal();confirmBox("Supprimer ce projet ?",`« ${p.name} » et son historique seront effacés. L'argent lui-même reste sur ton compte.`,"Supprimer",()=>{write("pots",p.id,null);render();toast("Projet supprimé");});};
-    if(!p) setTimeout(()=>$("#peName").focus(),60);
+    if(!p) autoFocus($("#peName"));
   });
 }
 
@@ -1629,7 +1636,7 @@ function catchupSheet(amount,from){
   let months=amount>c.base*0.3?2:1;
   openModal(`<h2>${manual?"Ajouter un montant à rattraper":"Rattraper "+monthName(from)}</h2>
     ${manual?`<p class="small muted">Un dépassement, un découvert ou une dépense imprévue à récupérer sur tes prochains budgets.</p>
-      <div class="amt-in"><input class="num" id="cuAmt" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Montant"><span>${curSym()}</span></div>`
+      <label class="amt-in"><input class="num" id="cuAmt" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="Montant"><span>${curSym()}</span></label>`
       :`<p class="muted">Dépassement : <b class="num" style="color:var(--ink)">${fm0(amount)}</b>. Sur combien de mois veux-tu le récupérer ?</p>`}
     <div class="seg" role="group" aria-label="Durée">${[1,2,3].map(n=>`<button type="button" data-months="${n}">${n} mois</button>`).join("")}</div>
     <div id="cuHint"></div>
@@ -1641,7 +1648,7 @@ function catchupSheet(amount,from){
       const a=amt(), per=a/months, newAvail=Math.max(0,c.base-c.catchup-per);
       $("#cuHint").innerHTML=a>0?`<div class="nudge ${per>c.base*0.35?"d":"ok"}">${per>c.base*0.35?"<b>Ça va être serré.</b> ":""}<b>−${fm0(per)} par mois</b> pendant ${months} mois. Ton budget passera à environ <b>${fm0(newAvail)}</b> par mois, soit <b>${fm0(newAvail*12/52)}</b> par semaine.</div>`:"";};
     $("#scrim").addEventListener("click",e=>{const b=e.target.closest("[data-months]"); if(b){months=+b.dataset.months;upd();}});
-    if(manual){$("#cuAmt").addEventListener("input",upd); setTimeout(()=>$("#cuAmt").focus(),60);}
+    if(manual){$("#cuAmt").addEventListener("input",upd); autoFocus($("#cuAmt"),true);}
     upd();
     $("#cuSave").onclick=()=>{const a=r2(amt()); if(!(a>0)){$("#cuErr").textContent="Indique un montant supérieur à 0.";return;}
       const start=manual?$("#cuStart").value:c.mk;
@@ -1719,6 +1726,7 @@ document.addEventListener("pointerup",holdEnd); document.addEventListener("point
 document.addEventListener("pointerout",e=>{const b=e.target.closest&&e.target.closest("#holdBtn"); if(b&&!b.contains(e.relatedTarget)) holdEnd();});
 document.addEventListener("contextmenu",e=>{if(e.target.closest&&e.target.closest("#holdBtn")) e.preventDefault();});
 
+document.addEventListener("touchstart",()=>{},{passive:true});
 document.addEventListener("click",e=>{
   const t=e.target.closest("button"); if(!t) return;
   if(t.hasAttribute("data-close")){closeModal();return;}
@@ -1769,7 +1777,7 @@ document.addEventListener("click",e=>{
   if(a==="pay"){const k=activeCard(); if(!k){toast("Crée d'abord ta carte CauriPay."); newCardFlow(); return;} cardSel=k.id; paySheet(k,"nfc"); return;}
   if(a==="newcard"){newCardFlow();return;}
   if(a==="receive"){rx.tab="new"; goTab("transfert"); return;}
-  if(a==="wish"){goTab("envies"); setTimeout(()=>{const w=$("#wishName"); if(w) w.focus();},60); return;}
+  if(a==="wish"){goTab("envies"); setTimeout(()=>autoFocus($("#wishName")),60); return;}
   if(a==="newcontact"){contactSheet();return;}
   if(a==="editcontact"){contactSheet(rx.contact&&S.contacts[rx.contact]?rx.contact:null);return;}
   if(a==="swapcur"){const q=quote(); if(rx.cur==="EUR"){rx.cur="LOC"; rx.str=q.local?String(q.local):"";} else {rx.cur="EUR"; rx.str=q.eur?String(q.eur).replace(".",","):"";} render(); return;}
