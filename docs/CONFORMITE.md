@@ -1,0 +1,188 @@
+# CauriPay : ce que la loi impose
+
+Synthèse préparée en octobre 2026 pour cadrer le projet. **Ce n'est pas un avis juridique.** Avant d'ouvrir de vrais transferts d'argent, fais valider ce document par un avocat en droit bancaire et financier en France, et par un conseil local dans chaque pays d'envoi.
+
+Les points marqués **à vérifier** viennent de sources secondaires (presse, cabinets, blogs spécialisés) et doivent être confirmés sur le texte officiel.
+
+---
+
+## 1. L'essentiel
+
+| Ce que fait CauriPay | Réglementé ? | Ce qu'il faut |
+| --- | --- | --- |
+| Gestion de budget, épargne, envies (aujourd'hui) | Non, hors droit commun | RGPD, mentions légales, CGU, droit de la consommation, accessibilité |
+| « Recevoir d'Afrique » en **démonstration** (aujourd'hui) | Non : aucun fonds ne circule | Dire clairement que c'est une démo (fait dans l'appli) |
+| « Recevoir d'Afrique » **réel** | **Oui** : c'est un service de paiement (transmission de fonds) | Agrément, ou partenariat avec un établissement agréé, en Europe **et** dans chaque pays d'envoi |
+
+**Le point bloquant.** En France, seuls les prestataires agréés peuvent fournir des services de paiement (Code monétaire et financier, art. L. 521-2). L'exercice sans agrément est un délit. CauriPay ne doit donc **jamais** encaisser, conserver ou reverser de l'argent elle-même tant qu'elle n'a pas de statut.
+
+**La voie recommandée.** CauriPay reste l'application (l'interface, la marque, l'expérience) et s'appuie sur **des partenaires agréés** :
+
+- en Afrique, un acteur agréé localement qui encaisse en mobile money ou par virement, et qui passe par une banque autorisée pour sortir les devises ;
+- en Europe, un établissement de paiement ou de monnaie électronique agréé qui reçoit les fonds et les verse sur le compte bancaire de l'utilisateur.
+
+Ce sont les partenaires qui portent les agréments, la vérification d'identité et la lutte contre le blanchiment. CauriPay signe avec eux un contrat de prestataire technique, ou devient leur agent.
+
+---
+
+## 2. Pourquoi l'Afrique → Europe est difficile
+
+C'est exactement le problème que tu as repéré. Il a trois causes principales.
+
+### 2.1 Le contrôle des changes dans les pays d'envoi
+
+Vers l'Afrique, l'argent sort librement d'Europe. Dans l'autre sens, la plupart des pays africains contrôlent la sortie des devises pour protéger leurs réserves de change.
+
+**Zone UEMOA** (Sénégal, Côte d'Ivoire, Mali, Burkina Faso, Bénin, Togo, Niger, Guinée-Bissau)
+
+- Le règlement n° 06/2024/CM/UEMOA, adopté en décembre 2024, remplace le règlement n° 09/2010 sur les relations financières extérieures. La BCEAO a publié 15 instructions d'application en juillet 2025 (n° 01/07/2025/RFE à 15/07/2025/RFE). L'instruction n° 09/07/2025/RFE est entrée en vigueur le 1er août 2025.
+- Les transferts vers l'étranger passent par un **intermédiaire agréé**, en pratique une banque, qui contrôle les justificatifs avant d'exécuter l'opération.
+- Pour un particulier (aide familiale, frais de scolarité), les justificatifs cités sont : un certificat de résidence ou un titre de séjour du bénéficiaire à l'étranger, les pièces justifiant la dépense (loyer, inscription) et un formulaire de change signé. **À vérifier** sur le texte de la BCEAO.
+- Seuil : selon une source secondaire, les transferts **inférieurs à 1 000 000 FCFA** (environ 1 500 €) peuvent se faire sans justificatif particulier, sous réserve des règles anti-blanchiment. L'ancien règlement de 2010 fixait ce seuil à 500 000 FCFA. **À vérifier.**
+- Côté services de paiement, l'instruction BCEAO n° 001-01-2024 encadre les services de paiement dans l'UMOA. La période de mise en conformité a pris fin en mars 2025 : les acteurs sans agrément doivent cesser leur activité.
+
+**Zone CEMAC** (Cameroun, Gabon, Congo, Tchad, Centrafrique, Guinée équatoriale)
+
+- Le règlement n° 02/18/CEMAC/UMAC/CM du 21 décembre 2018 n'interdit pas les transferts, mais exige de justifier leur réalité et leur objet, par l'intermédiaire d'une banque agréée.
+- Le seuil de dispense de justificatifs n'a pas pu être confirmé. **À vérifier** dans le règlement et les instructions de la BEAC.
+
+**Autres pays** (Maroc, Tunisie, Algérie, Nigeria, Ghana, Kenya…) : chacun a son propre régime de change. C'est pourquoi l'appli les affiche « bientôt ».
+
+### 2.2 La lutte contre le blanchiment
+
+- L'Union européenne tient une **liste des pays tiers à haut risque**. Depuis le 29 janvier 2026 (règlements délégués 2026/46 et 2026/83), elle comprend notamment **l'Algérie, l'Angola, le Cameroun, la Côte d'Ivoire, la RD Congo, le Kenya, la Namibie et le Soudan du Sud**. Le Burkina Faso, le Mali, le Mozambique, le Nigeria, l'Afrique du Sud et la Tanzanie en ont été retirés.
+- Pour toute opération impliquant un pays de cette liste, les établissements européens doivent appliquer une **vigilance renforcée** : origine des fonds, objet de l'opération, contrôles plus poussés. Le Cameroun et la Côte d'Ivoire font partie des pays ouverts dans l'appli : prévois des contrôles plus lourds pour ces deux pays.
+- Cette charge de conformité explique pourquoi beaucoup de banques européennes refusent ces flux (on parle de *de-risking*).
+
+### 2.3 Une bonne nouvelle : la parité fixe
+
+Le franc CFA (XOF et XAF), le franc comorien et l'escudo cap-verdien sont liés à l'euro par un taux fixe : 1 € = 655,957 F CFA. Il n'y a donc **pas de risque de change** : le montant reçu est connu au moment de la demande. C'est pour cela que l'appli commence par ces pays.
+
+---
+
+## 3. Côté Europe : quel statut pour CauriPay ?
+
+| Option | Rôle de CauriPay | Exigences principales | Délai |
+| --- | --- | --- | --- |
+| **A. Prestataire technique** d'un partenaire agréé | Fournit l'appli ; le partenaire signe avec l'utilisateur, encaisse et verse | Contrat de partenariat. Si CauriPay présente le service du partenaire contre rémunération, elle peut devoir s'inscrire comme **IOBSP** (intermédiaire en opérations de banque et en services de paiement) au registre de l'ORIAS. **À vérifier** avec un avocat. | Quelques mois |
+| **B. Agent** d'un établissement agréé | Agit au nom du partenaire, qui l'inscrit auprès de l'ACPR (registre REGAFI) | Honorabilité, formation anti-blanchiment, contrôle par le partenaire | 2 à 4 mois |
+| **C. Établissement de paiement** agréé par l'ACPR | Fournit lui-même le service | Capital minimum de **20 000 €** pour la seule transmission de fonds (arrêté du 29 octobre 2009, art. 4), dossier d'agrément de 6 à 12 mois, contrôle interne, protection des fonds des clients, dispositif anti-blanchiment complet | 6 à 12 mois |
+| **D. Établissement de monnaie électronique** | Tient des soldes « CauriPay » | Capital de 350 000 € et exigences renforcées | Plus d'un an |
+
+**Recommandation : commencer par A, puis passer à B.** Ne pas créer de « solde CauriPay » : l'argent doit être versé directement sur le compte bancaire (IBAN) de l'utilisateur par le partenaire. Sinon, l'activité devient de l'émission de monnaie électronique.
+
+---
+
+## 4. Obligations dès que les transferts sont réels
+
+Elles sont portées surtout par le partenaire agréé, mais l'appli doit lui fournir les bonnes informations et les bons écrans.
+
+### 4.1 Services de paiement : DSP2, puis DSP3 et RSP
+
+- **Information avant paiement** : montant, frais, taux de change, montant payé, délai. *L'écran « Vérifie ta demande » affiche déjà tout cela.*
+- **Authentification forte** : l'accès au compte et la validation d'un paiement exigent deux facteurs (par exemple mot de passe + code ou biométrie). Un e-mail et un mot de passe seuls ne suffiront pas. Supabase propose la double authentification par application (TOTP).
+- **DSP3 et RSP** : accord politique en novembre 2025, textes approuvés par la commission ECON du Parlement le 5 mai 2026. L'adoption formelle est attendue fin 2026, pour une application environ 21 mois après l'entrée en vigueur, donc **vers mi-2028**. Ils renforcent la lutte contre la fraude et la vérification du bénéficiaire. À anticiper.
+
+### 4.2 Lutte contre le blanchiment et le financement du terrorisme
+
+- Code monétaire et financier, art. L. 561-1 et suivants :
+  - identifier et vérifier chaque client (pièce d'identité, selfie, justificatif de domicile) ;
+  - surveiller les opérations en continu ;
+  - appliquer une vigilance renforcée pour les pays à haut risque ;
+  - déclarer les soupçons à **Tracfin** ;
+  - conserver les données **5 ans** (art. L. 561-12).
+- **Gel des avoirs et sanctions** : vérifier chaque client et chaque expéditeur contre les listes de l'UE, de l'ONU et le registre national des gels (DG Trésor).
+- **Règlement (UE) 2024/1624 (AMLR)** : il s'applique directement à partir du **10 juillet 2027** et harmonise ces règles dans toute l'UE, sous la supervision de la nouvelle autorité européenne AMLA.
+- **Règlement (UE) 2023/1113 sur les transferts de fonds**, en vigueur depuis le 30 décembre 2024 : le nom et l'identifiant de compte de l'expéditeur doivent accompagner le transfert. Le prestataire du bénéficiaire contrôle ces informations et, **au-delà de 1 000 €**, vérifie l'identité du bénéficiaire avant de créditer. *L'appli collecte déjà le nom, le pays et le numéro de l'expéditeur.*
+
+### 4.3 Résilience numérique : DORA
+
+Le règlement (UE) 2022/2554 s'applique depuis le 17 janvier 2025 aux établissements de paiement. Si CauriPay est leur prestataire technique, le contrat de partenariat contiendra des clauses DORA : sécurité, continuité, audits, notification des incidents.
+
+---
+
+## 5. Données personnelles (RGPD) : à respecter dès maintenant
+
+| Obligation | État |
+| --- | --- |
+| Politique de confidentialité claire (art. 13), y compris pour les expéditeurs (art. 14) | **Fait** : `legal/confidentialite.html`, plus un message dans la fiche expéditeur. À compléter. |
+| Base légale pour chaque usage | **Fait** dans la politique |
+| Consentement séparé pour la newsletter, case non cochée | **Fait** à l'inscription |
+| Mots de passe conformes à la recommandation CNIL n° 2022-100 (12 caractères de 4 types, ou 14 caractères) | **Fait** : contrôle en direct à l'inscription. À régler aussi dans Supabase. |
+| Limitation des tentatives de connexion | **Fait** en mode démo (blocage d'une minute après 5 échecs). Supabase le gère aussi. |
+| Droit d'accès et portabilité | **Fait** : « Exporter mes données » |
+| Droit à l'effacement | **Fait** : « Supprimer mon compte » (fonction `delete_my_account`) |
+| Pas de traceurs soumis à consentement | **Fait** : uniquement du stockage local strictement nécessaire. Les polices sont hébergées avec l'appli, sans appel à Google. |
+| Registre des traitements (art. 30) | **À faire** |
+| Analyse d'impact (AIPD, art. 35) | **À faire avant les transferts réels** : données financières, surveillance anti-blanchiment, transferts hors UE. Très probablement obligatoire. |
+| Délégué à la protection des données (art. 37) | **Probablement obligatoire** en version réelle (surveillance régulière et systématique à grande échelle) |
+| Contrats de sous-traitance (art. 28) | **À signer** avec Supabase (choisir une région UE) et le partenaire de paiement |
+| Transferts hors UE (chapitre V) | GitHub (États-Unis) ; partenaires africains : clauses contractuelles types ou art. 49. **À documenter.** |
+| Lois africaines sur les données | **À vérifier** pour les expéditeurs : par exemple loi n° 2008-12 au Sénégal, loi n° 2013-450 en Côte d'Ivoire, loi n° 2024/017 au Cameroun |
+
+**Minimisation :** CauriPay ne doit **pas** stocker les pièces d'identité. La vérification est confiée au partenaire agréé ou à son prestataire. En démo, aucune donnée d'identité n'est demandée.
+
+---
+
+## 6. Droit de la consommation et du numérique
+
+| Obligation | État |
+| --- | --- |
+| Mentions légales : éditeur, directeur de publication, hébergeur (LCEN, art. 6) | **Projet fait** : `legal/mentions-legales.html`, à compléter |
+| CGU acceptées à l'inscription, case non pré-cochée | **Fait** : `legal/cgu.html`, à compléter |
+| Réservé aux majeurs | **Fait** : case « J'ai 18 ans ou plus » |
+| Rétractation de 14 jours pour un service financier conclu à distance (Code de la consommation, art. L. 222-7) | **Fait** : bouton « Me rétracter du contrat » dans le profil pendant 14 jours |
+| **Fonction de rétractation** en ligne : directive (UE) 2023/2673, applicable depuis le 19 juin 2026, transposée en France par l'ordonnance n° 2026-2 du 5 janvier 2026 (**à vérifier** sur Légifrance) | **Fait** (même bouton). Faire valider l'intitulé exact exigé par l'ordonnance. |
+| Résiliation simple, sans frais | **Fait** : « Supprimer mon compte » |
+| Médiateur de la consommation (Code de la consommation, art. L. 612-1) | **À faire** : en désigner un et l'indiquer dans les mentions légales et les CGU |
+| Transparence des prix | **Fait** : frais, taux et total affichés avant validation. Les frais actuels sont des exemples (`js/config.js`). |
+| Prévention des arnaques (« mules » financières) | **Fait** : avertissement et attestation avant chaque demande |
+| Accessibilité : directive (UE) 2019/882 et décret n° 2023-931, applicables depuis le 28 juin 2025 ; les services bancaires aux consommateurs sont visés | **Bonnes pratiques en place** : libellés, contrastes, alternative clavier à l'appui long. La directive exempte les microentreprises de services (moins de 10 personnes et 2 M€ de chiffre d'affaires ou de bilan) : **à vérifier** pour la transposition française. Un audit sera nécessaire en version réelle. |
+
+---
+
+## 7. Avant d'ouvrir de vrais transferts
+
+1. **Créer la structure juridique** : société, compte bancaire professionnel, assurance responsabilité civile professionnelle.
+2. **Choisir les partenaires** :
+   - un établissement agréé en Europe, qui reçoit les fonds et les verse sur un IBAN ;
+   - un ou plusieurs agrégateurs agréés en zone UEMOA et CEMAC, qui encaissent en mobile money et sortent les devises par une banque.
+
+   Vérifie pour chacun l'agrément, les pays couverts et la répartition des obligations anti-blanchiment. Exemples d'acteurs à étudier, sans recommandation : agrégateurs de paiement panafricains et réseaux de transfert déjà actifs sur ces pays.
+3. **Faire valider par un avocat** le statut de CauriPay (prestataire technique, IOBSP ou agent), les CGU et la politique de confidentialité.
+4. **Compléter les champs surlignés** des pages légales, désigner un médiateur et un délégué à la protection des données.
+5. **Réaliser l'analyse d'impact (AIPD)** et tenir le registre des traitements.
+6. **Activer les vrais comptes** (Supabase, région UE), puis la **double authentification**.
+7. **Intégrer l'API du partenaire** à la place de la simulation : création de la demande, page de paiement, statuts, notifications. Dans `js/app.js`, la fonction `simulate()` et la page `vPayer()` sont les deux endroits à remplacer.
+8. **Fixer les vrais tarifs et plafonds** avec le partenaire, en tenant compte des seuils de justificatifs de chaque zone (`js/config.js`).
+9. **Ajouter les justificatifs** si le partenaire les demande, par exemple un certificat de scolarité pour le motif « Frais de scolarité », transmis directement au partenaire.
+
+---
+
+## 8. Le nom « CauriPay »
+
+Avant d'investir dans la marque (logo, nom de domaine, communication), vérifie que le nom est disponible. Des noms proches existent déjà **dans le même secteur** :
+
+- **Cauri Money** : fintech basée à Dakar, tournée vers la diaspora africaine et les transferts d'argent ;
+- **Cauri** : prestataire de paiement britannique, actif dans l'Union européenne.
+
+Le risque est réel, puisqu'il s'agit des mêmes services (paiement, transfert). À faire :
+
+1. Rechercher les marques existantes sur [INPI](https://data.inpi.fr) (France), [EUIPO](https://euipo.europa.eu/eSearch) (Union européenne) et [OAPI](https://www.oapi.int) (17 pays d'Afrique francophone, dont la zone UEMOA et la CEMAC).
+2. Si le nom est libre, déposer la marque dans les classes 36 (services financiers) et 9 (logiciels et applications), au moins en France ou dans l'UE, et à l'OAPI.
+3. Sinon, choisir un autre nom tant que l'appli n'est pas encore connue.
+
+---
+
+## Sources consultées (octobre 2026)
+
+- PSD3 et RSP, calendrier : [Clifford Chance, avril 2026](https://www.cliffordchance.com/content/dam/cliffordchance/briefings/2026/04/impact-of-psd3-are-you-ready.pdf) · [Adyen](https://www.adyen.com/en_AE/knowledge-hub/psd3) · [fintech.global, août 2026](https://fintech.global/2026/08/14/psd3-is-coming-is-your-payments-licence-ready-for-2028/)
+- BCEAO, services de paiement : [Instruction n° 001-01-2024](https://bceao.int/sites/default/files/inline-files/Instruction-No001-01-2024_relative_aux_services_de_paiement_dans_l-UMOA.pdf) · [Avis n° 004-03-2025, fin de la période transitoire](https://downloads.bceao.int/sites/default/files/2025-04/AVIS%20N%C2%B0%20004-03-2025%20relatif%20%C3%A0%20la%20fin%20de%20la%20p%C3%A9riode%20transitoire%20de%20mise%20en%20conformit%C3%A9%20aux%20dispositions%20de%20l%27instruction%20n%C2%B0001-01-2024.pdf)
+- UEMOA, relations financières extérieures : [Financial Afrik, règlement 06/2024](https://www.financialafrik.com/2026/03/24/reglement-06-2024-uemoa-ce-qui-change-vraiment-pour-les-banques-et-les-entreprises/) · [Alliance solidaire, instruction de 2025](https://alliancesolidaire.org/2026/05/07/union-economique-et-monetaire-ouest-africaine-la-france-attentive-aux-nouvelles-regles-de-transferts-de-fonds-imposees-par-la-bceao/) · [Règlement 09/2010 (ancien)](https://www.vie-publique.sn/documents/11024/reglement-092010cmuemoa-relations-financieres-exterieures-uemoa)
+- CEMAC : [Règlement 02/18/CEMAC/UMAC/CM (BEAC)](https://www.beac.int/wp-content/uploads/2020/06/REGLEMENT-02-18-CEMAC-UMAC-CM_001.pdf) · [Transferts depuis la CEMAC, avocat.fr](https://consultation.avocat.fr/blog/axel-mayombo/article-2983508-transferts-en-devises-depuis-la-zone-cemac-comprendre-les-difficultes-et-mieux-preparer-son-dossier.html)
+- Liste UE des pays à haut risque : [Bird & Bird, 2026](https://cm.twobirds.com/en/insights/2026/eu-list-of-highrisk-countries-and-jurisdictions-for-money-laundering-and-terrorism-financing-amended) · [FIAU Malta](https://fiaumalta.org/news/eu-commission-delegated-acts-on-high-risk-third-countries/) · [Commission européenne](https://finance.ec.europa.eu/node/199_en)
+- Règlement 2023/1113, article 7 : [Springlex](https://www.springlex.eu/fr/packages/aml/tfr-regulation/article-7/)
+- Fonction de rétractation : [HLC, transposition française](https://hlc.com/fr/publications/transposition-under-french-law-of-the-eu-mandatory-withdrawal-button-for-online-sales) · [iubenda](https://www.iubenda.com/fr/blog/la-nouvelle-fonction-de-retractation-en-ligne-ce-que-signifie-la-directive-ue-2023-2673-pour-votre-entreprise/)
+- Mots de passe : [Clubic, recommandation CNIL 2022](https://www.clubic.com/pro/it-business/securite-et-donnees/actualite-442581-mots-de-passe-la-cnil-fait-ses-recommandations-etes-vous-dans-les-clous.html) · [Solutions numériques](https://www.solutions-numeriques.com/juridique-mots-de-passe-quelles-recommandations-de-la-cnil)
+- Établissement de paiement, capital : [Crassula, guide 2026](https://crassula.io/fr/guides/comment-creer-une-entreprise-de-transfert-dargent/) · [ACPR, sécurité des paiements](https://acpr.banque-france.fr/system/files/import/acpr/medias/documents/jch_20180403_conference_securite_des_paiements.pdf)
+- Accessibilité : [DGCCRF](https://www.economie.gouv.fr/node/3235045) · [Qualibooth, décret 2023-931](https://www.qualibooth.com/accessibility/compliance/europe/france---decree-number-2023-931)
