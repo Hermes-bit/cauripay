@@ -61,6 +61,23 @@ function runCounters(entered){
   });
 }
 const replay=(el,cls)=>{if(!el||calm()) return; el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);};
+
+/* ============ ouverture : le cauri, puis la plongée dans l'appli ============ */
+(function opening(){
+  const sp=document.getElementById("splash"), body=document.body; if(!sp){body.classList.remove("sp-on"); return;}
+  let done=false;
+  const go=()=>{
+    if(done) return; done=true;
+    if(calm()){sp.classList.add("sp-fade"); body.classList.remove("sp-on"); setTimeout(()=>sp.remove(),400); return;}
+    // la fente devient une ouverture : on perce le fond et la coquille, puis on fonce dedans
+    sp.querySelectorAll("[data-hole]").forEach(e=>e.setAttribute("mask","url(#spHole)"));
+    sp.classList.add("dive"); body.classList.add("sp-reveal"); body.classList.remove("sp-on");
+    setTimeout(()=>{sp.remove(); body.classList.remove("sp-reveal");},950);
+  };
+  // compté depuis l'ouverture de la page, pour garder le même rythme même si le script arrive tard
+  setTimeout(go,Math.max(0,(calm()?700:1500)-performance.now()));
+  sp.addEventListener("pointerdown",go);
+})();
 // catch-up plans: profile.catchups = [{id,from,amount,months,start,kind:"plan"|"skip"|"surplus"}]
 function deductionFor(mk,P){return (P.catchups||[]).filter(x=>x.kind==="plan"&&x.amount>0&&mk>=x.start&&mk<monthAdd(x.start,x.months)).reduce((s,x)=>s+x.amount/x.months,0);}
 // anciennes couleurs (thème clair) → couleurs lisibles sur fond sombre
