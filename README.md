@@ -108,6 +108,7 @@ Ton logo s'affiche sur l'écran de connexion et sur la page de paiement envoyée
 1. Exporte-le en **SVG** si possible (sinon en PNG carré d'au moins 512 × 512 px).
 2. Remplace `icons/logo.svg` en gardant le même nom. Pour un PNG, nomme-le `icons/logo.png` et remplace `icons/logo.svg` par `icons/logo.png` dans `js/app.js` (constante `LOGO`).
 3. Pour l'icône du téléphone et de l'onglet, génère les fichiers `icon-192.png`, `icon-512.png` et `icon-maskable-512.png` (par exemple avec [maskable.app](https://maskable.app/editor)), puis remplace ceux du dossier `icons/`, ainsi que `icons/icon.svg`.
+4. Pour l'iPhone, remplace `apple-touch-icon.png` (à la racine du projet) par une image de **180 × 180 px, sans transparence** (fond plein). Sinon l'iPhone affiche une lettre à la place du logo. Change ensuite `?v=2` en `?v=3` dans `index.html`, pour que l'iPhone recharge l'icône.
 
 ---
 
