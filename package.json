@@ -1,0 +1,12 @@
+{
+  "name": "cauripay",
+  "private": true,
+  "description": "CauriPay : budget, épargne, réception d'argent depuis l'Afrique et cartes (démonstration)",
+  "scripts": {
+    "emulateur": "node dev/serveur.js",
+    "test": "node dev/test.js"
+  },
+  "devDependencies": {
+    "puppeteer-core": "23.11.1"
+  }
+}

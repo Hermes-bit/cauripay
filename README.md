@@ -36,7 +36,9 @@ cauripay/
 ├── fonts/                   Polices Outfit et Manrope (hébergées ici, pas chez Google)
 ├── icons/                   Logo et icônes de l'appli
 ├── manifest.webmanifest     Installation sur l'écran d'accueil du téléphone
-└── .github/workflows/       Mise en ligne automatique sur GitHub Pages
+├── dev/                     Émulateur, scénarios de test, serveur de développement (jamais mis en ligne)
+├── package.json             Commandes « npm run emulateur » et « npm test »
+└── .github/workflows/       Tests, puis mise en ligne automatique sur GitHub Pages
 ```
 
 ### Où modifier quoi
@@ -145,6 +147,24 @@ Ton logo s'affiche sur l'écran de connexion et sur la page de paiement envoyée
 3. Fais un clic droit sur `index.html`, puis **Open with Live Server**. L'appli s'ouvre dans ton navigateur et se recharge à chaque enregistrement.
 
 > Ouvre toujours l'appli avec Live Server, pas en double-cliquant sur `index.html`. Sinon la création de compte et l'installation sur l'écran d'accueil peuvent être bloquées.
+
+---
+
+## Tester l'appli : l'émulateur en direct
+
+L'émulateur montre l'appli dans un téléphone et y joue tous les tests sous tes yeux : un doigt rose touche les boutons, tape les montants, fait l'appui long, et chaque vérification se coche à droite.
+
+1. Une seule fois : dans le terminal de VS Code, tape `npm install`.
+2. Lance l'émulateur : `npm run emulateur`, ou dans VS Code **Terminal → Exécuter la tâche → CauriPay : émulateur en direct**.
+3. Ouvre **http://localhost:5600/dev/** dans ton navigateur et clique sur **Lancer les tests**.
+
+À chaque fichier enregistré, l'émulateur recharge l'appli et relance les tests tout seul (case « Relancer à chaque modification »). Tu peux choisir l'appareil (iPhone 16 Pro Max, iPhone 15, iPhone SE, Android, iPad) et la vitesse (« Lente » pour bien regarder).
+
+- **Tes données ne sont jamais touchées :** l'émulateur ouvre l'appli en mode test (`?test`), avec des données rangées à part.
+- **Règle « aucun recul » :** chaque série est comparée à la précédente. Si une vérification qui marchait ne marche plus, l'émulateur l'affiche en rouge en haut.
+- **Sans écran :** `npm test` joue les mêmes tests dans le terminal.
+- **Avant chaque mise en ligne,** GitHub joue tous les tests. Au moindre échec, le site n'est pas mis à jour : l'ancienne version reste en ligne.
+- **Ajouter un test :** les scénarios sont dans `dev/scenarios.js`, un bloc par écran.
 
 ---
 

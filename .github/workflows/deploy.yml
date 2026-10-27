@@ -1,4 +1,4 @@
-name: Mise en ligne sur GitHub Pages
+name: Tests puis mise en ligne sur GitHub Pages
 
 on:
   push:
@@ -18,7 +18,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 1. Tous les tests de l'émulateur, sans écran. Un seul échec = pas de mise en ligne (règle « aucun recul »).
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: chrome
+        uses: browser-actions/setup-chrome@v1
+      - run: npm ci --no-audit --no-fund
+      - name: Tests complets
+        run: npm test
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+      - name: Garder le rapport des tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapport-des-tests
+          path: dev/rapports/
+          if-no-files-found: ignore
+
+  # 2. Mise en ligne, seulement si les tests sont tous verts
   deploy:
+    needs: tests
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -42,9 +67,14 @@ jobs:
           else
             echo "BCE injoignable : taux du dépôt conservés"
           fi
+      # Seuls les fichiers de l'appli sont publiés (pas les outils de test ni la documentation interne)
+      - name: Préparer le site
+        run: |
+          mkdir -p _site
+          cp -r index.html apple-touch-icon.png manifest.webmanifest .nojekyll css js icons fonts legal data _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4

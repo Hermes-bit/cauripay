@@ -5,7 +5,8 @@
 (function(){
 "use strict";
 const CFG=window.CAURIPAY_CONFIG||{};
-const live=!!(CFG.supabaseUrl&&CFG.supabaseAnonKey);
+const NS=window.CAURIPAY_NS||"cauripay_";
+const live=!!(CFG.supabaseUrl&&CFG.supabaseAnonKey)&&NS==="cauripay_";   // les tests restent toujours en démo
 const SB_SRC="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";
 const TABLE="cauripay_data";
 const here=()=>location.origin+location.pathname;
@@ -31,7 +32,7 @@ function frError(e){
 const toUser=u=>u?{id:u.id,email:u.email,name:(u.user_metadata&&u.user_metadata.name)||"",confirmed:!!u.email_confirmed_at}:null;
 
 /* ---------- mode démo : comptes dans ce navigateur ---------- */
-const ACC="cauripay_accounts", SES="cauripay_session", FAIL="cauripay_auth_fail";
+const ACC=NS+"accounts", SES=NS+"session", FAIL=NS+"auth_fail";
 const b64=buf=>btoa(String.fromCharCode(...new Uint8Array(buf)));
 async function hashPw(pw,salt){
   if(!(window.crypto&&crypto.subtle)) throw new Error("Ouvre l'appli en https (ou avec Live Server) pour créer un compte.");

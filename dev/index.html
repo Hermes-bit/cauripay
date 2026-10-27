@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Émulateur CauriPay</title>
+  <link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="emulateur.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><img src="../icons/logo.svg" alt="" width="34" height="34"><div><b>CauriPay</b><span>Émulateur et tests en direct</span></div></div>
+  <div class="live" id="live" title="Lien avec le serveur de développement"><i></i><span>Connexion…</span></div>
+  <div class="controls">
+    <label>Appareil <select id="device"></select></label>
+    <label>Vitesse <select id="speed">
+      <option value="lent">Lente, pour regarder</option>
+      <option value="normal" selected>Normale</option>
+      <option value="rapide">Rapide</option>
+      <option value="max">Maximale</option>
+    </select></label>
+    <label class="chk"><input type="checkbox" id="auto" checked> Relancer à chaque modification</label>
+    <button id="reload" class="ghost" title="Recharger l'appli sans lancer les tests">Recharger l'appli</button>
+    <button id="run" class="pri">Lancer les tests</button>
+  </div>
+</header>
+<main class="main">
+  <section class="stage" id="stage" aria-label="Téléphone">
+    <div class="device" id="device-frame">
+      <div class="screen" id="screen">
+        <iframe id="app" title="CauriPay dans l'émulateur"></iframe>
+        <div class="sbar" id="sbar" aria-hidden="true"><span class="clock">9:41</span><span class="icons"><i class="sig"></i><i class="wifi"></i><i class="bat"></i></span></div>
+        <div class="island" aria-hidden="true"></div>
+        <div class="homebar" aria-hidden="true"></div>
+        <div class="finger" id="finger" aria-hidden="true"></div>
+      </div>
+    </div>
+    <p class="hint" id="hint">Tu peux aussi utiliser l'appli toi-même dans le téléphone.</p>
+  </section>
+  <aside class="panel">
+    <div class="summary" id="summary">
+      <div class="sum-top"><b id="sum-title">Prêt</b><span id="sum-time"></span></div>
+      <div class="bar"><i id="sum-bar"></i></div>
+      <div class="sum-counts"><span id="sum-ok">0 réussie</span><span id="sum-ko">0 échec</span><span id="sum-total">0 vérification</span></div>
+      <p class="sum-reg" id="sum-reg">Lance les tests pour vérifier toute l'appli.</p>
+    </div>
+    <div class="now" id="now"><span>Étape en cours</span><b id="now-step">—</b></div>
+    <ol class="scenarios" id="scenarios"></ol>
+    <details class="journal" open><summary>Journal</summary><ol id="journal"></ol></details>
+    <details class="history"><summary>Historique des séries</summary><ol id="history"></ol></details>
+  </aside>
+</main>
+<script src="scenarios.js"></script>
+<script src="emulateur.js"></script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 "use strict";
 /* ============ helpers ============ */
 const $=s=>document.querySelector(s);
-const CFG=window.CAURIPAY_CONFIG||{}, Auth=window.CauriPayAuth;
+const CFG=window.CAURIPAY_CONFIG||{}, Auth=window.CauriPayAuth, NS=window.CAURIPAY_NS||"cauripay_";
 const DEMO=CFG.transferMode!=="live";
 const LEGAL_VERSION="2026-10";
 const URL_RECOVERY=/type=recovery/.test(location.hash);
@@ -171,15 +171,16 @@ let tab="accueil", navStack=[], txFilter="all", histLimit=3, weekOpen=false;
 let authView="login", authErr="", authMsg="", pendingEmail="", authBusy=false;
 let rx={tab:"new",contact:null,country:"SN",str:"",cur:"EUR"};
 let pendingWrites=0, dirty=false, R=null, lastSync=0;
-try{let t=localStorage.getItem("cauripay_tab"); t={depenses:"budget",tresorerie:"epargne"}[t]||t; if(["accueil","budget","epargne","envies","cartes"].includes(t)) tab=t;}catch(e){}
+try{let t=localStorage.getItem(NS+"tab"); t={depenses:"budget",tresorerie:"epargne"}[t]||t; if(["accueil","budget","epargne","envies","cartes"].includes(t)) tab=t;}catch(e){}
 const displayName=()=>(S.profile&&S.profile.name)||(user&&user.name)||"";
 
-const cacheKey=()=>"cauripay_v3_"+(user?user.id:"anon");
+const cacheKey=()=>NS+"v3_"+(user?user.id:"anon");
 function saveLocal(){try{localStorage.setItem(cacheKey(),JSON.stringify(S));}catch(e){}}
 function normalize(d){const o=emptyState(); if(d&&typeof d==="object"){o.profile=d.profile||null; o.savedAt=+d.savedAt||0; KINDS.forEach(k=>{if(d[k]&&typeof d[k]==="object") o[k]=d[k];});} return o;}
 function loadLocal(){try{const s=JSON.parse(localStorage.getItem(cacheKey())||"null"); if(s&&typeof s==="object"&&s.tx) return normalize(s);}catch(e){} return null;}
 // Données de l'ancienne version (Tirelire, avant les comptes) : reprises une seule fois, par le premier compte qui se connecte sur l'appareil.
 function legacyData(){
+  if(NS!=="cauripay_") return null;   // mode test : jamais les données de l'ancienne version
   try{if(localStorage.getItem("cauripay_legacy_owner")) return null;}catch(e){return null;}
   let d=null;
   try{const s=JSON.parse(localStorage.getItem("tirelire_v2_cache")||"null"); if(s&&s.profile) d=normalize(s);}catch(e){}
@@ -442,11 +443,13 @@ function render(){
   runCounters(entered);
   if(phase==="app"&&tab==="transfert"&&rx.tab==="new") rxUpdate();
   if(phase==="app"&&tab==="cartes") cardsAfterRender();
+  topShade();
 }
+function topShade(){const tl=phase==="app"&&tab==="accueil"&&document.querySelector(".top-lime"); document.body.classList.toggle("lime-top",!!tl&&tl.getBoundingClientRect().bottom>90);}
 function goTab(k,isBack){
   if($("#scrim")) closeModal();
   if(k==="transfert"||k==="profil"){ if(!isBack&&tab!==k) navStack.push(tab); }
-  else{ navStack=[]; try{localStorage.setItem("cauripay_tab",k);}catch(_){} }
+  else{ navStack=[]; try{localStorage.setItem(NS+"tab",k);}catch(_){} }
   tab=k; render(); scroller().scrollTo({top:0});
 }
 function navHtml(entered){
@@ -1727,6 +1730,7 @@ document.addEventListener("pointerout",e=>{const b=e.target.closest&&e.target.cl
 document.addEventListener("contextmenu",e=>{if(e.target.closest&&e.target.closest("#holdBtn")) e.preventDefault();});
 
 document.addEventListener("touchstart",()=>{},{passive:true});
+{const sc=document.getElementById("scroller"); if(sc) sc.addEventListener("scroll",topShade,{passive:true});}
 document.addEventListener("click",e=>{
   const t=e.target.closest("button"); if(!t) return;
   if(t.hasAttribute("data-close")){closeModal();return;}

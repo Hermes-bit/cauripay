@@ -1,4 +1,8 @@
 /* Réglages de CauriPay. C'est le seul fichier à modifier pour brancher les services en ligne. */
+// Mode test (émulateur) : « ?test » dans l'adresse → données rangées à part (préfixe cptest_),
+// jamais mélangées aux tiennes, et toujours en mode démo.
+window.CAURIPAY_NS = /[?&]test(=|&|$)/.test(location.search) ? "cptest_" : "cauripay_";
+
 window.CAURIPAY_CONFIG = {
   // Comptes et synchronisation avec Supabase (voir README, « Activer les vrais comptes »).
   // Laisse vide pour le mode démo : les comptes et les données restent dans le navigateur de l'appareil.
